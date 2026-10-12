@@ -1,4 +1,4 @@
-const VERSION = "1.5";
+const VERSION = "1.6";
 const FOLDER = "SpendWidget-data-v1";
 const MAX_TEXT = 8192;
 const DUPLICATE_WINDOW_MS = 120000;
@@ -1573,6 +1573,101 @@ async function journal() {
   }
 }
 
+// ===== UNCATEGORIZED =====
+
+function uncategorized(day) {
+  const data = loadMonth(day);
+  const byKey = new Map();
+
+  for (const e of data.events) {
+    if (!["expense", "refund"].includes(e.status))
+      continue;
+    if (!e.merchant ||
+        categoryOf(e.merchant) !== "Без категории")
+      continue;
+
+    const key = merchantKey(e.merchant);
+    if (!key) continue;
+
+    const item = byKey.get(key) || {
+      merchant: e.merchant,
+      count: 0,
+      totals: {}
+    };
+
+    item.count++;
+    item.totals[e.currency] =
+      (item.totals[e.currency] || 0) +
+      (e.status === "refund" ? -1 : 1) *
+      e.amountMinor;
+
+    byKey.set(key, item);
+  }
+
+  const fx = readFx();
+
+  return Array.from(byKey.values())
+    .map(x => ({
+      ...x,
+      hkd: Object.entries(x.totals).reduce(
+        (sum, [c, minor]) =>
+          sum + (hkdOf({
+            currency: c,
+            amountMinor: minor,
+            status: "expense"
+          }, fx) || 0),
+        0
+      )
+    }))
+    .sort((a, b) => b.hkd - a.hkd);
+}
+
+async function sortUncategorized() {
+  const list = uncategorized(localDay(new Date()));
+
+  if (!list.length) {
+    await message(
+      "Всё разобрано",
+      "В этом месяце нет магазинов без категории"
+    );
+    return;
+  }
+
+  const choices = CATEGORIES
+    .filter(c => c !== "Без категории")
+    .concat(["Пропустить"]);
+
+  let done = 0;
+
+  for (let i = 0; i < list.length; i++) {
+    const x = list[i];
+
+    const amounts = Object.entries(x.totals)
+      .map(([c, minor]) => formatMoney(minor, c))
+      .join(" / ");
+
+    const n = await choose(
+      x.merchant,
+      amounts + " · операций: " + x.count +
+        "\n" + (i + 1) + " из " + list.length +
+        "\nКатегория запомнится для магазина",
+      choices
+    );
+
+    if (n < 0) break;
+    if (choices[n] === "Пропустить") continue;
+
+    teachMerchant(x.merchant, choices[n]);
+    done++;
+  }
+
+  if (done)
+    await message(
+      "Сохранено",
+      "Категорий назначено: " + done
+    );
+}
+
 // ===== EXPORT =====
 
 async function exportData() {
@@ -1673,6 +1768,10 @@ async function testText() {
 
 async function appMenu() {
   while (true) {
+    const pending = uncategorized(
+      localDay(new Date())
+    ).length;
+
     const choice = await choose(
       "SpendWidget v" + VERSION,
       "Mox + Octopus: автоматический разбор. " +
@@ -1681,6 +1780,7 @@ async function appMenu() {
         "Предпросмотр — обзор",
         "Предпросмотр — категории",
         "Журнал / исправления",
+        "Разобрать без категории (" + pending + ")",
         "Добавить вручную",
         "Тест уведомления",
         "Экспорт JSON",
@@ -1709,15 +1809,18 @@ async function appMenu() {
       await journal();
 
     if (choice === 3)
-      await manualEntry();
+      await sortUncategorized();
 
     if (choice === 4)
-      await testText();
+      await manualEntry();
 
     if (choice === 5)
+      await testText();
+
+    if (choice === 6)
       await exportData();
 
-    if (choice === 6) {
+    if (choice === 7) {
       const fx = await updateFx(true);
 
       await message(
