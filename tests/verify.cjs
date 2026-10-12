@@ -38,6 +38,26 @@ check('Merchant learning persists',()=>{ctx.teachMerchant('Example Shop','Еда
 check('Persist, load and replace override',()=>{const e=ctx.createEvent({source:'Mox',raw:'You spent HKD 25 at Example Cafe',tooLong:false},new Date('2026-10-01T12:00:00'));ctx.saveEvent(e);assert.equal(ctx.loadMonth(e.day).events.length,1);ctx.saveOverride(e,{status:'ignored'});assert.equal(ctx.loadMonth(e.day).events[0].status,'ignored');ctx.saveOverride(e,{status:'expense',confirmed:true});assert.equal(ctx.loadMonth(e.day).events[0].status,'expense')});
 check('Uncategorized merchants listed by amount',()=>{const now=new Date();for(const t of ['You spent HKD 80 at Lan Fong Yuen','You spent HKD 20 at Lan Fong Yuen','You spent HKD 300 at Tak Kee'])ctx.saveEvent(ctx.createEvent({source:'Mox',raw:t,tooLong:false},now));const u=ctx.uncategorized(ctx.localDay(now));assert.equal(u[0].merchant,'Tak Kee');assert.equal(u[1].count,2);ctx.teachMerchant('Lan Fong Yuen','Еда');assert(!ctx.uncategorized(ctx.localDay(now)).some(x=>x.merchant==='Lan Fong Yuen'))});
 check('Repeated category and override writes overwrite files',()=>{ctx.teachMerchant('Repeat Shop','Еда');ctx.teachMerchant('Repeat Shop','Покупки');ctx.teachMerchant('Other Shop','Услуги');assert.equal(ctx.categoryOf('Repeat Shop'),'Покупки');assert(![...files.keys()].some(k=>k.endsWith('.tmp')))});
+check('Alipay and WeChat follow settings, CNY parsing',()=>{
+ assert.equal(parse('Alipay','你在全家消费了¥25.00').status,'ignored');
+ assert.equal(parse('WeChat','微信支付 ¥18.00').status,'review');
+ ctx.saveSettings({alipay:'parse',wechat:'parse'});
+ let p=parse('Alipay','支付宝 你在全家便利店消费了¥25.50，余额¥1,000.00');assert.equal(p.status,'expense');assert.equal(p.currency,'CNY');assert.equal(p.amountMinor,2550);assert.equal(p.merchant,'全家便利店');assert.equal(ctx.categoryOf(p.merchant),'Еда');
+ p=parse('WeChat','微信支付 支付成功 ¥36.00 商户：瑞幸咖啡');assert.equal(p.amountMinor,3600);assert.equal(p.merchant,'瑞幸咖啡');
+ p=parse('WeChat','向美团付款 58.80元');assert.equal(p.amountMinor,5880);assert.equal(p.merchant,'美团');assert.equal(ctx.categoryOf(p.merchant),'Еда');
+ p=parse('Alipay','付款成功 ¥12.00');assert.equal(p.merchant,'Alipay');
+ for(const t of ['你收到一笔转账 ¥100.00','退款到账 ¥20.00','余额宝收益 0.52元'])assert.equal(parse('Alipay',t).status,'review');
+ assert.equal(ctx.sourceName('微信支付'),'WeChat');
+ ctx.saveSettings({alipay:'ignore',wechat:'review'});
+});
+check('CNY base converts HKD and keeps CNY',()=>{
+ ctx.saveSettings({base:'CNY'});
+ assert.equal(ctx.BASE(),'CNY');
+ const s=ctx.hkdSummary([{day:'2026-10-01',status:'expense',currency:'CNY',amountMinor:1000},{day:'2026-10-01',status:'expense',currency:'HKD',amountMinor:1000}],'2026-10-01',{rates:{HKD:1.1}});
+ assert(Math.abs(s.sums.today-(10+10/1.1))<1e-9);
+ assert(ctx.shortHKD(5).startsWith('¥'));
+ ctx.saveSettings({base:'HKD'});assert(ctx.shortHKD(5).startsWith('HK$'));
+});
 check('Refund and FX totals',()=>{const events=[{day:'2026-10-01',status:'expense',currency:'HKD',amountMinor:1000},{day:'2026-10-01',status:'refund',currency:'HKD',amountMinor:200},{day:'2026-10-01',status:'expense',currency:'JPY',amountMinor:2000}];assert.equal(ctx.hkdSummary(events,'2026-10-01',{rates:{JPY:20}}).sums.today,108)});
 const nodes=[];
 class Node {

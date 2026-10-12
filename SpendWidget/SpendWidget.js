@@ -1,4 +1,4 @@
-const VERSION = "1.6.1";
+const VERSION = "1.7";
 const FOLDER = "SpendWidget-data-v1";
 const MAX_TEXT = 8192;
 const DUPLICATE_WINDOW_MS = 120000;
@@ -25,7 +25,18 @@ const COLORS = {
 };
 
 const FX_URL =
-  "https://api.frankfurter.dev/v1/latest?base=HKD";
+  "https://api.frankfurter.dev/v1/latest?base=";
+
+// Настройки хранятся в папке данных и не затираются Updater'ом.
+// base — валюта итогов; alipay / wechat — что делать с их уведомлениями.
+const SETTINGS_DEFAULT = {
+  base: "HKD",
+  alipay: "ignore",
+  wechat: "review"
+};
+const BASES = ["HKD", "CNY"];
+const PAY_MODES = ["parse", "ignore", "review"];
+let _settings = null;
 
 let _store = null;
 let _merchantMap = null;
@@ -76,8 +87,11 @@ function sourceName(s) {
   if (/^(octopus|八達通|八达通)$/.test(n))
     return "Octopus";
 
-  if (/^(alipay|alipay china|支付宝|支付寶)$/.test(n))
+  if (/^(alipay|alipay china|alipay hk|支付宝|支付寶)$/.test(n))
     return "Alipay";
+
+  if (/^(wechat|wechat pay|weixin|微信|微信支付)$/.test(n))
+    return "WeChat";
 
   return "Unknown";
 }
@@ -154,9 +168,10 @@ function formatMoney(minor, currency) {
 }
 
 function shortHKD(n) {
-  return "HK$ " + n.toLocaleString(
-    "en-HK", { maximumFractionDigits: 0 }
-  );
+  return (BASE() === "CNY" ? "¥ " : "HK$ ") +
+    n.toLocaleString(
+      "en-HK", { maximumFractionDigits: 0 }
+    );
 }
 
 function review(reason) {
@@ -405,6 +420,45 @@ function loadPeriods(day) {
   };
 }
 
+// ===== SETTINGS =====
+
+function settingsPath() {
+  const s = store();
+  return s.fm.joinPath(s.root, "settings-v1.json");
+}
+
+function settings() {
+  if (_settings) return _settings;
+
+  let v = {};
+  try {
+    const fm = store().fm;
+    if (fm.fileExists(settingsPath()))
+      v = JSON.parse(fm.readString(settingsPath())) || {};
+  } catch (_) {}
+
+  _settings = {
+    base: BASES.includes(v.base)
+      ? v.base : SETTINGS_DEFAULT.base,
+    alipay: PAY_MODES.includes(v.alipay)
+      ? v.alipay : SETTINGS_DEFAULT.alipay,
+    wechat: PAY_MODES.includes(v.wechat)
+      ? v.wechat : SETTINGS_DEFAULT.wechat
+  };
+  return _settings;
+}
+
+function saveSettings(patch) {
+  const next = { ...settings(), ...patch };
+  atomicWrite(settingsPath(), next);
+  _settings = null;
+  return settings();
+}
+
+function BASE() {
+  return settings().base;
+}
+
 // ===== MERCHANT DATABASE =====
 
 function categoryMapPath() {
@@ -462,7 +516,7 @@ function teachMerchant(merchant, category) {
 const CATEGORY_RULES = [
   {
     category: "Транспорт",
-    regex: /train|\bmtr\b|metro|subway|rail|\bbus\b|ferry|tram|taxi|uber trip|uber ride|didi|grab ride|shinkansen|jr west|octopus fare|transport|toll|地铁|地鐵|高铁|高鐵|铁路|鐵路|滴滴|出租车|出租車|巴士|港鐵|港铁|电车|電車|交通|新幹線|電鉄|電鐵/
+    regex: /train|\bmtr\b|metro|subway|rail|\bbus\b|ferry|tram|taxi|uber trip|uber ride|didi|grab ride|shinkansen|jr west|octopus fare|transport|toll|地铁|地鐵|高铁|高鐵|铁路|鐵路|滴滴|高德打车|打车|出租车|出租車|巴士|港鐵|港铁|电车|電車|交通|新幹線|電鉄|電鐵/
   },
   {
     category: "Поездки",
@@ -474,7 +528,7 @@ const CATEGORY_RULES = [
   },
   {
     category: "Еда",
-    regex: /mcdonald|\bkfc\b|starbucks|coffee|cafe|café|restaurant|food|dining|tea house|heytea|sushi|pizza|burger|bakery|餐厅|餐廳|咖啡|茶饮|茶飲|美团外卖|美團外賣|foodpanda|deliveroo|genki|shake shack|jollibee|mos burger|yoshinoya|sukiya|matsuya|saizeriya|haidilao|海底捞|海底撈|喜茶|奈雪|瑞幸|luckin|coco ichibanya|ichiran|一蘭|一兰|一風堂|一风堂|鼎泰豐|鼎泰丰|大家樂|大家乐|大快活|美心|太興|太兴|譚仔|谭仔|茶餐廳|茶餐厅|麥當勞|麦当劳|肯德基|必勝客|必胜客|壽司|寿司|拉麵|拉面|飯店|饭店|麵包|面包|麵店|面店|飲食|饮食|奶茶|外卖|外賣|甜品|冰淇淋|\bpret\b|\bdomino\b|\bpizza hut\b/
+    regex: /mcdonald|\bkfc\b|starbucks|coffee|cafe|café|restaurant|food|dining|tea house|heytea|sushi|pizza|burger|bakery|餐厅|餐廳|咖啡|茶饮|茶飲|美团外卖|美團外賣|美团|美團|饿了么|餓了麼|餐饮|餐飲|foodpanda|deliveroo|genki|shake shack|jollibee|mos burger|yoshinoya|sukiya|matsuya|saizeriya|haidilao|海底捞|海底撈|喜茶|奈雪|瑞幸|luckin|coco ichibanya|ichiran|一蘭|一兰|一風堂|一风堂|鼎泰豐|鼎泰丰|大家樂|大家乐|大快活|美心|太興|太兴|譚仔|谭仔|茶餐廳|茶餐厅|麥當勞|麦当劳|肯德基|必勝客|必胜客|壽司|寿司|拉麵|拉面|飯店|饭店|麵包|面包|麵店|面店|飲食|饮食|奶茶|外卖|外賣|甜品|冰淇淋|\bpret\b|\bdomino\b|\bpizza hut\b/
   },
   {
     category: "Еда",
@@ -608,12 +662,23 @@ function parseNotification(input) {
     };
   }
 
-  // Alipay с картой Mox: не считаем дважды.
-  if (input.source === "Alipay") {
-    return {
-      status: "ignored",
-      reason: "Alipay исключён: учёт через Mox"
-    };
+  // Alipay / WeChat Pay: режим задаётся в настройках.
+  // По умолчанию Alipay исключён (оплата через Mox, не считаем дважды).
+  if (input.source === "Alipay" || input.source === "WeChat") {
+    const mode = input.source === "Alipay"
+      ? settings().alipay
+      : settings().wechat;
+
+    if (mode === "ignore")
+      return {
+        status: "ignored",
+        reason: input.source + " исключён в настройках"
+      };
+
+    if (mode === "review")
+      return review(input.source + ": разбор выключен в настройках");
+
+    return parseChinaPay(raw, input.source);
   }
 
   // OCTOPUS
@@ -718,6 +783,55 @@ function parseNotification(input) {
   };
 }
 
+// Уведомления Alipay / WeChat Pay в юанях:
+// «你在XX消费了¥25.00», «向XX付款 ¥25.00», «微信支付 ¥25.00 商户：XX».
+function parseChinaPay(raw, source) {
+  if (/退款|收款|收到|到账|转入|收入|领取|refund|received|top[ -]?up|充值/i.test(raw))
+    return review(source + ": поступление, возврат или пополнение");
+
+  const re = /(?:[¥￥]|CNY|RMB|人民币)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)|([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元/gi;
+
+  const amounts = new Set();
+  for (const m of raw.matchAll(re)) {
+    // Остаток («余额¥1,000») не считаем расходом.
+    const before = raw.slice(Math.max(0, m.index - 6), m.index);
+    if (/余额|余額|balance/i.test(before)) continue;
+    amounts.add((m[1] || m[2]).replace(/,/g, ""));
+  }
+
+  if (amounts.size !== 1)
+    return review(source + ": сумма не найдена или их несколько");
+
+  let amountMinor;
+  try {
+    amountMinor = parseMinor([...amounts][0], "CNY");
+  } catch (e) {
+    return review(e.message);
+  }
+
+  let merchant = "";
+  const patterns = [
+    /(?:商户|商家|收款方|对方|收款人)[:：]\s*([^，,。;；¥￥\n]{1,40})/,
+    /(?:向|付款给|支付给)\s*([^，,。¥￥\s][^，,。¥￥]{0,40}?)\s*(?:付款|支付|转账|，|,|。|[¥￥]|$)/,
+    /在\s*([^，,。¥￥\s][^，,。¥￥]{0,40}?)\s*(?:消费|付款|支付|使用)/
+  ];
+  for (const p of patterns) {
+    const m = raw.match(p);
+    if (m && m[1].trim()) {
+      merchant = m[1].trim();
+      break;
+    }
+  }
+
+  return {
+    status: "expense",
+    currency: "CNY",
+    amountMinor,
+    merchant: (merchant || source).slice(0, 240),
+    reason: "Распознано " + source
+  };
+}
+
 function createEvent(input, now) {
   const parsed = parseNotification(input);
 
@@ -779,7 +893,9 @@ function ingest(value) {
 
 function fxPath() {
   const s = store();
-  return s.fm.joinPath(s.root, "fx-hkd.json");
+  return s.fm.joinPath(
+    s.root, "fx-" + BASE().toLowerCase() + ".json"
+  );
 }
 
 function readFx() {
@@ -793,9 +909,10 @@ function readFx() {
 
     if (!v ||
         !v.rates ||
+        (v.base || "HKD") !== BASE() ||
         !Number.isFinite(v.fetchedAt) ||
         !Number.isFinite(v.rates.JPY) ||
-        !Number.isFinite(v.rates.CNY))
+        !Number.isFinite(v.rates.USD))
       return null;
 
     return v;
@@ -813,17 +930,18 @@ async function updateFx(force = false) {
     return old;
 
   try {
-    const req = new Request(FX_URL);
+    const base = BASE();
+    const req = new Request(FX_URL + base);
     req.timeoutInterval = 8;
 
     const data = await req.loadJSON();
 
     if (!data ||
-        data.base !== "HKD" ||
+        data.base !== base ||
         !data.rates)
       throw new Error("Неверный ответ FX");
 
-    const rates = { HKD: 1 };
+    const rates = { [base]: 1 };
 
     for (const [k, v] of Object.entries(data.rates)) {
       if (/^[A-Z]{3}$/.test(k) &&
@@ -832,11 +950,11 @@ async function updateFx(force = false) {
         rates[k] = v;
     }
 
-    if (!rates.JPY || !rates.CNY)
-      throw new Error("Нет курсов JPY/CNY");
+    if (!rates.JPY || !rates.USD)
+      throw new Error("Нет курсов JPY/USD");
 
     const result = {
-      base: "HKD",
+      base,
       date: data.date,
       fetchedAt: Date.now(),
       rates
@@ -850,7 +968,7 @@ async function updateFx(force = false) {
 }
 
 function hkdOf(e, fx) {
-  const rate = e.currency === "HKD"
+  const rate = e.currency === BASE()
     ? 1
     : fx && fx.rates &&
       fx.rates[e.currency];
@@ -1005,7 +1123,7 @@ function renderWidget(data, fx, mode = "CATEGORIES") {
 
   addText(
     header,
-    "HKD  ·  " +
+    BASE() + "  ·  " +
       day.slice(5, 7) + "/" +
       day.slice(0, 4),
     9,
@@ -1233,7 +1351,7 @@ function renderWidget(data, fx, mode = "CATEGORIES") {
 
     addText(
       w,
-      "* HKD: оценка, данные могут быть неполными",
+      "* " + BASE() + ": оценка, данные могут быть неполными",
       8,
       COLORS.warning
     );
@@ -1742,7 +1860,7 @@ async function testText() {
   a.message = "Проверка без записи в журнал";
 
   a.addTextField(
-    "Источник: Mox / Octopus",
+    "Источник: Mox / Octopus / Alipay / WeChat",
     "Octopus"
   );
 
@@ -1779,6 +1897,45 @@ async function testText() {
   );
 }
 
+// ===== SETTINGS MENU =====
+
+function modeName(m) {
+  return {
+    parse: "считается",
+    ignore: "исключён",
+    review: "на проверку"
+  }[m];
+}
+
+async function settingsMenu() {
+  const b = await choose(
+    "Валюта итогов",
+    "Сейчас: " + BASE(),
+    ["HKD — Гонконг", "CNY — юани"]
+  );
+  if (b >= 0) saveSettings({ base: BASES[b] });
+
+  for (const [key, name, hint] of [
+    ["alipay", "Alipay", "Исключить, если оплата идёт через учитываемый банк (Mox)"],
+    ["wechat", "WeChat Pay", ""]
+  ]) {
+    const m = await choose(
+      name + ": " + modeName(settings()[key]),
+      hint,
+      ["Считать расходом", "Исключить", "Отправлять на проверку"]
+    );
+    if (m >= 0) saveSettings({ [key]: PAY_MODES[m] });
+  }
+
+  await updateFx(true);
+  await message(
+    "Сохранено",
+    "Итоги в " + BASE() +
+      "\nAlipay: " + modeName(settings().alipay) +
+      "\nWeChat: " + modeName(settings().wechat)
+  );
+}
+
 // ===== MENU =====
 
 async function appMenu() {
@@ -1789,8 +1946,9 @@ async function appMenu() {
 
     const choice = await choose(
       "SpendWidget v" + VERSION,
-      "Mox + Octopus: автоматический разбор. " +
-        "SC: проверка. Alipay: исключён.",
+      "Итоги в " + BASE() +
+        ". Alipay: " + modeName(settings().alipay) +
+        ". WeChat: " + modeName(settings().wechat) + ".",
       [
         "Предпросмотр — обзор",
         "Предпросмотр — категории",
@@ -1799,7 +1957,8 @@ async function appMenu() {
         "Добавить вручную",
         "Тест уведомления",
         "Экспорт JSON",
-        "Обновить курс HKD"
+        "Обновить курс " + BASE(),
+        "Настройки: валюта и Alipay/WeChat"
       ]
     );
 
@@ -1837,18 +1996,22 @@ async function appMenu() {
 
     if (choice === 7) {
       const fx = await updateFx(true);
+      const other = BASE() === "CNY" ? "HKD" : "CNY";
 
       await message(
-        "Курс HKD",
+        "Курс " + BASE(),
         fx
           ? "Данные на " + fx.date +
-            "\nJPY за HKD: " +
+            "\nJPY за " + BASE() + ": " +
             fx.rates.JPY +
-            "\nCNY за HKD: " +
-            fx.rates.CNY
+            "\n" + other + " за " + BASE() + ": " +
+            fx.rates[other]
           : "Курс недоступен"
       );
     }
+
+    if (choice === 8)
+      await settingsMenu();
   }
 }
 
