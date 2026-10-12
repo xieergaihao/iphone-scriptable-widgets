@@ -1,4 +1,4 @@
-// QuickActions Fixed
+// QuickActions Fixed v2
 // Medium: широкие кнопки, 3 колонки × 2 ряда.
 // Без заголовка. Все существующие команды сохранены.
 
@@ -10,14 +10,28 @@ const COLORS = {
   text: "F4F8FA"
 };
 
+// 4-е поле — прямая ссылка. Если заполнена, кнопка открывает
+// приложение сразу, без захода в «Команды»: Scriptable → приложение.
+// Пусто — запускается команда из 3-го поля, как раньше.
+// Примеры:
+//   Notion:  "notion://www.notion.so/<id страницы>"
+//   Maps:    "comgooglemaps://?daddr=<адрес>&directionsmode=transit"
+//            "maps://?daddr=<адрес>&dirflg=r"
+//   Slack:   "slack://user?team=<T…>&id=<U…>"  (сразу открывает DM)
 const ACTIONS = [
-  ["Happ VPN",     "globe",       "QA VPN"],
-  ["Идея",         "lightbulb",   "QA Idea"],
-  ["TrainChinese", "book.closed","QA Translate"],
-  ["Таймер",       "timer",       "QA Timer"],
-  ["Домой",        "house",       "QA Home"],
-  ["Slack себе",   "bubble.left", "QA Slack"]
+  ["Happ VPN",     "globe",       "QA VPN",       ""],
+  ["Идея",         "lightbulb",   "QA Idea",      ""],
+  ["TrainChinese", "book.closed", "QA Translate", ""],
+  ["Таймер",       "timer",       "QA Timer",     ""],
+  ["Домой",        "house",       "QA Home",      ""],
+  ["Slack себе",   "bubble.left", "QA Slack",     ""]
 ];
+
+function actionURL(shortcut, direct) {
+  if (direct && direct.trim()) return direct.trim();
+  return "shortcuts://run-shortcut?name=" +
+    encodeURIComponent(shortcut);
+}
 
 // Размеры широких кнопок сохраняем.
 const TILE_W = 104;
@@ -58,7 +72,7 @@ function labelImage(title) {
 }
 
 function addButton(row, action) {
-  const [title, symbolName, shortcut] = action;
+  const [title, symbolName, shortcut, direct] = action;
 
   const tile = row.addStack();
   tile.layoutVertically();
@@ -72,9 +86,7 @@ function addButton(row, action) {
   tile.borderColor = new Color(COLORS.border);
   tile.borderWidth = 0.5;
 
-  const url =
-    "shortcuts://run-shortcut?name=" +
-    encodeURIComponent(shortcut);
+  const url = actionURL(shortcut, direct);
 
   tile.url = url;
 
