@@ -1,4 +1,4 @@
-const VERSION = "1.6";
+const VERSION = "1.6.1";
 const FOLDER = "SpendWidget-data-v1";
 const MAX_TEXT = 8192;
 const DUPLICATE_WINDOW_MS = 120000;
@@ -193,7 +193,22 @@ function atomicWrite(path, obj) {
   const tmp = path + "." + UUID.string() + ".tmp";
 
   fm.writeString(tmp, JSON.stringify(obj, null, 2));
+
+  // FileManager.move в Scriptable не перезаписывает файл:
+  // сначала убираем старый, данные уже лежат во временном.
+  if (fm.fileExists(path)) fm.remove(path);
   fm.move(tmp, path);
+}
+
+// Убирает временные файлы, оставшиеся от сбоев записи.
+function cleanupTmp() {
+  try {
+    const s = store();
+    for (const name of s.fm.listContents(s.root)) {
+      if (/\.tmp$/.test(name))
+        s.fm.remove(s.fm.joinPath(s.root, name));
+    }
+  } catch (_) {}
 }
 
 function saveEvent(e) {
@@ -1878,6 +1893,7 @@ async function main() {
   }
 
   if (config.runsInApp) {
+    cleanupTmp();
     await updateFx(false);
     await appMenu();
     return;

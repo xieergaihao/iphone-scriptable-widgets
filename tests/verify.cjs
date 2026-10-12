@@ -13,7 +13,7 @@ const fm = {
  fileExists:p=>files.has(p)||directories.has(p),
  createDirectory:p=>directories.add(p), isDirectory:p=>directories.has(p),
  writeString:(p,s)=>files.set(p,s), readString:p=>{assert(files.has(p));return files.get(p)},
- move:(a,b)=>{assert(files.has(a));files.set(b,files.get(a));files.delete(a)},
+ move:(a,b)=>{assert(files.has(a));if(files.has(b))throw new Error('exists');files.set(b,files.get(a));files.delete(a)},remove:p=>{files.delete(p)},
  listContents:p=>[...new Set([...directories,...files.keys()].filter(x=>x.startsWith(p+'/')).map(x=>x.slice(p.length+1).split('/')[0]))]
 };
 let id=0;
@@ -37,6 +37,7 @@ check('Duplicate and distinct purchases',()=>{const sample={status:'expense',ori
 check('Merchant learning persists',()=>{ctx.teachMerchant('Example Shop','Еда');assert.equal(ctx.categoryOf('Example Shop'),'Еда')});
 check('Persist, load and replace override',()=>{const e=ctx.createEvent({source:'Mox',raw:'You spent HKD 25 at Example Cafe',tooLong:false},new Date('2026-10-01T12:00:00'));ctx.saveEvent(e);assert.equal(ctx.loadMonth(e.day).events.length,1);ctx.saveOverride(e,{status:'ignored'});assert.equal(ctx.loadMonth(e.day).events[0].status,'ignored');ctx.saveOverride(e,{status:'expense',confirmed:true});assert.equal(ctx.loadMonth(e.day).events[0].status,'expense')});
 check('Uncategorized merchants listed by amount',()=>{const now=new Date();for(const t of ['You spent HKD 80 at Lan Fong Yuen','You spent HKD 20 at Lan Fong Yuen','You spent HKD 300 at Tak Kee'])ctx.saveEvent(ctx.createEvent({source:'Mox',raw:t,tooLong:false},now));const u=ctx.uncategorized(ctx.localDay(now));assert.equal(u[0].merchant,'Tak Kee');assert.equal(u[1].count,2);ctx.teachMerchant('Lan Fong Yuen','Еда');assert(!ctx.uncategorized(ctx.localDay(now)).some(x=>x.merchant==='Lan Fong Yuen'))});
+check('Repeated category and override writes overwrite files',()=>{ctx.teachMerchant('Repeat Shop','Еда');ctx.teachMerchant('Repeat Shop','Покупки');ctx.teachMerchant('Other Shop','Услуги');assert.equal(ctx.categoryOf('Repeat Shop'),'Покупки');assert(![...files.keys()].some(k=>k.endsWith('.tmp')))});
 check('Refund and FX totals',()=>{const events=[{day:'2026-10-01',status:'expense',currency:'HKD',amountMinor:1000},{day:'2026-10-01',status:'refund',currency:'HKD',amountMinor:200},{day:'2026-10-01',status:'expense',currency:'JPY',amountMinor:2000}];assert.equal(ctx.hkdSummary(events,'2026-10-01',{rates:{JPY:20}}).sums.today,108)});
 const nodes=[];
 class Node {
