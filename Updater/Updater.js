@@ -1,4 +1,4 @@
-// Updater: ставит свежие SpendWidget и QuickActions из GitHub.
+// Updater: ставит свежие SpendWidget, QuickActions и MyDayWidget из GitHub.
 // Один раз вставь этот код в Scriptable под именем Updater,
 // дальше обновление — запуск Updater (▶ или из «Команд»).
 // Данные расходов (папка SpendWidget-data-v1) не трогает.
@@ -10,6 +10,7 @@ const RAW =
 const FILES = [
   ["SpendWidget/SpendWidget.js", ["SpendWidget"]],
   ["QuickActions/QuickActions.js", ["QuickActions Fixed", "QuickActions"]],
+  ["MyDayWidget/MyDayWidget.js", ["MyDayWidget-v4", "MyDayWidget"]],
   ["Updater/Updater.js", ["Updater"]]
 ];
 
