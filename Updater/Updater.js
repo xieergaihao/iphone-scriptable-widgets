@@ -12,6 +12,7 @@ const FILES = [
     new RegExp("const FOLDER = \"Spend" + "Widget-data-v1\"")],
   ["QuickActions/QuickActions.js", "QuickActions", /^\/\/ QuickActions/],
   ["MyDayWidget/MyDayWidget.js", "MyDay", /^\s*\/\/ MyDay v/],
+  ["BodyWidget/BodyWidget.js", "BodyWidget", /^\/\/ BodyWidget v/],
   ["Updater/Updater.js", "Updater", /^\/\/ Updater/]
 ];
 
