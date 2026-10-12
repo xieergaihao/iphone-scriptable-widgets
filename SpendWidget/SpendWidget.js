@@ -415,6 +415,15 @@ function merchantCategories() {
       obj && typeof obj === "object" &&
       !Array.isArray(obj) ? obj : {};
   } catch (_) {
+    // Не перезаписываем битый файл пустой картой:
+    // сохраняем копию, чтобы не потерять выученные категории.
+    try {
+      if (fm.fileExists(path))
+        fm.writeString(
+          path + ".broken-" + Date.now(),
+          fm.readString(path)
+        );
+    } catch (_) {}
     _merchantMap = {};
   }
 
@@ -432,10 +441,7 @@ function teachMerchant(merchant, category) {
   const map = merchantCategories();
   map[key] = category;
 
-  store().fm.writeString(
-    categoryMapPath(),
-    JSON.stringify(map, null, 2)
-  );
+  atomicWrite(categoryMapPath(), map);
 }
 
 const CATEGORY_RULES = [
@@ -604,7 +610,7 @@ function parseNotification(input) {
     }
 
     const re =
-      /(?:HK\$|HKD)\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)\s+for\s+(Train|MTR|Bus|Ferry|Tram|Light Rail|Transport|[A-Za-z][A-Za-z -]{1,50})(?=\s+Your new balance|[.]|$)/gi;
+      /(?:HK\$|HKD)\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)\s+for\s+(Train|MTR|Bus|Ferry|Tram|Light Rail|Transport|[A-Za-z0-9][A-Za-z0-9&' -]{1,50}?)(?=\s+Your new balance|[.]|$)/gi;
 
     const hits = [...raw.matchAll(re)];
 
@@ -724,6 +730,10 @@ function createEvent(input, now) {
 function ingest(value) {
   const now = new Date();
   const input = unpackInput(value);
+
+  // Пустой запуск автоматизации не засоряет журнал.
+  if (!normalize(input.raw))
+    return "Пусто: не записано";
   const e = createEvent(input, now);
 
   saveEvent(e);
