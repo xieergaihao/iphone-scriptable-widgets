@@ -415,15 +415,6 @@ function merchantCategories() {
       obj && typeof obj === "object" &&
       !Array.isArray(obj) ? obj : {};
   } catch (_) {
-    // Не перезаписываем битый файл пустой картой:
-    // сохраняем копию, чтобы не потерять выученные категории.
-    try {
-      if (fm.fileExists(path))
-        fm.writeString(
-          path + ".broken-" + Date.now(),
-          fm.readString(path)
-        );
-    } catch (_) {}
     _merchantMap = {};
   }
 
@@ -441,7 +432,10 @@ function teachMerchant(merchant, category) {
   const map = merchantCategories();
   map[key] = category;
 
-  atomicWrite(categoryMapPath(), map);
+  store().fm.writeString(
+    categoryMapPath(),
+    JSON.stringify(map, null, 2)
+  );
 }
 
 const CATEGORY_RULES = [
@@ -610,7 +604,7 @@ function parseNotification(input) {
     }
 
     const re =
-      /(?:HK\$|HKD)\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)\s+for\s+(Train|MTR|Bus|Ferry|Tram|Light Rail|Transport|[A-Za-z0-9][A-Za-z0-9&' -]{1,50}?)(?=\s+Your new balance|[.]|$)/gi;
+      /(?:HK\$|HKD)\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)\s+for\s+(Train|MTR|Bus|Ferry|Tram|Light Rail|Transport|[A-Za-z][A-Za-z -]{1,50})(?=\s+Your new balance|[.]|$)/gi;
 
     const hits = [...raw.matchAll(re)];
 
@@ -730,10 +724,6 @@ function createEvent(input, now) {
 function ingest(value) {
   const now = new Date();
   const input = unpackInput(value);
-
-  // Пустой запуск автоматизации не засоряет журнал.
-  if (!normalize(input.raw))
-    return "Пусто: не записано";
   const e = createEvent(input, now);
 
   saveEvent(e);
@@ -916,6 +906,27 @@ function hkdSummary(events, day, fx) {
 
 // ===== WIDGET UI =====
 
+// Empty or unrecognised parameters show categories; OVERVIEW remains available.
+function widgetMode(parameter) {
+  return normalize(parameter).toUpperCase() === "OVERVIEW"
+    ? "OVERVIEW"
+    : "CATEGORIES";
+}
+
+function categoryRows(totals) {
+  const others = [
+    "Покупки", "Транспорт", "Поездки",
+    "Здоровье", "Услуги", "Без категории"
+  ].map(name => [name, totals[name] || 0])
+    .sort((a, b) => b[1] - a[1]);
+
+  return [
+    ["Еда", totals["Еда"] || 0],
+    ...others.slice(0, 2),
+    ["Прочее", others.slice(2).reduce((sum, entry) => sum + entry[1], 0)]
+  ];
+}
+
 function addText(parent, value, size, color, bold = false) {
   const t = parent.addText(String(value));
 
@@ -930,7 +941,7 @@ function addText(parent, value, size, color, bold = false) {
   return t;
 }
 
-function renderWidget(data, fx, mode) {
+function renderWidget(data, fx, mode = "CATEGORIES") {
   const day = localDay(new Date());
   const stats = hkdSummary(data.events, day, fx);
 
@@ -1027,25 +1038,10 @@ function renderWidget(data, fx, mode) {
         (totals[category] || 0) + amount;
     }
 
-    const ranked = Object.entries(totals)
-      .filter(x => x[1] > 0)
-      .sort((a, b) => b[1] - a[1]);
+    const rows = categoryRows(totals);
 
     for (let i = 0; i < 4; i++) {
-      const entry = i < 3
-        ? ranked[i]
-        : [
-            "Прочее",
-            ranked.slice(3).reduce(
-              (sum, x) => sum + x[1], 0
-            )
-          ];
-
-      const name = entry
-        ? entry[0]
-        : ["Еда", "Покупки", "Транспорт"][i];
-
-      const amount = entry ? entry[1] : 0;
+      const [name, amount] = rows[i];
 
       const row = w.addStack();
       row.centerAlignContent();
@@ -1735,9 +1731,7 @@ async function main() {
     const day = localDay(new Date());
     const fx = await updateFx(false);
 
-    const mode = String(
-      args.widgetParameter || "OVERVIEW"
-    ).trim().toUpperCase();
+    const mode = widgetMode(args.widgetParameter);
 
     Script.setWidget(
       renderWidget(
