@@ -1,0 +1,27 @@
+# Local data and exports
+SpendWidget-data-v1/
+**/SpendWidget-data-v1/
+SpendWidget-export-*
+*.event.json
+*.override.json
+merchant-categories-v1.json
+fx-hkd.json
+*.json
+*.shortcut
+*.shortcuts
+# Personal settings and credentials
+.env
+.env.*
+*.pem
+*.key
+*secrets*
+*credentials*
+*.local.*
+# Screenshots, temporary files and OS metadata
+*.png
+*.jpg
+*.jpeg
+*.heic
+*.tmp
+.DS_Store
+node_modules/
