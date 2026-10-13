@@ -1,4 +1,4 @@
-// MyDay v5 — Scriptable medium widget
+// MyDay v6 — Scriptable medium widget
 // Work calendar, today's weather, next nonempty day when today's meetings are over.
 // Set the exact calendar title in this field or in the widget Parameter.
 const WORK_CALENDAR_NAME = String(args.widgetParameter || '').trim();
@@ -74,9 +74,9 @@ async function getWeather(){
   try{
     const pos=await getPosition(cache);
     if(!pos)throw new Error('no position');
-    const url='https://api.open-meteo.com/v1/forecast?latitude='+encodeURIComponent(pos.lat)+'&longitude='+encodeURIComponent(pos.lon)+'&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=1&timezone=auto';
+    const url='https://api.open-meteo.com/v1/forecast?latitude='+encodeURIComponent(pos.lat)+'&longitude='+encodeURIComponent(pos.lon)+'&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&wind_speed_unit=kmh&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=1&timezone=auto';
     const r=await new Request(url).loadJSON();
-    const d={temp:Math.round(r.current.temperature_2m),code:r.current.weather_code,high:Math.round(r.daily.temperature_2m_max[0]),low:Math.round(r.daily.temperature_2m_min[0]),rain:r.daily.precipitation_probability_max[0],warnings:[]};
+    const d={temp:Math.round(r.current.temperature_2m),code:r.current.weather_code,high:Math.round(r.daily.temperature_2m_max[0]),low:Math.round(r.daily.temperature_2m_min[0]),rain:r.daily.precipitation_probability_max[0],wind:Math.round(r.current.wind_speed_10m),hum:Math.round(r.current.relative_humidity_2m),warnings:[]};
     try{d.warnings=await hkWarnings(pos);}catch(e){}
     fm.writeString(cachePath,JSON.stringify({ts:Date.now(),data:d,pos}));return d;
   }catch(e){return cache.data||null;}
@@ -130,10 +130,12 @@ const weatherStack=summary.addStack();weatherStack.layoutVertically();
 const weather=await getWeather();
 if(weather){
   txt(weatherStack,weather.temp+'°  '+condition(weather.code),15,C.white,true);
+  // Ветер и влажность; в старом кэше их нет — строка появится после обновления погоды
+  const air=[weather.wind!=null?'💨 '+weather.wind+' км/ч':null,weather.hum!=null?'💧 '+weather.hum+'%':null].filter(Boolean).join('  ');
   const warn=(weather.warnings||[]).join(' · ');
   if(warn)txt(weatherStack,'⚠ '+warn,9,C.amber,true);
-  else if(weather.rain>=RAIN_ALERT)txt(weatherStack,'↑'+weather.high+'°  ↓'+weather.low+'°  ☂ возьми зонт · '+weather.rain+'%',9,C.amber);
-  else txt(weatherStack,'↑'+weather.high+'°  ↓'+weather.low+'°  ☂ '+weather.rain+'%',9,C.muted);
+  else if(weather.rain>=RAIN_ALERT)txt(weatherStack,'☂ возьми зонт · '+weather.rain+'%'+(air?'  '+air:''),9,C.amber);
+  else txt(weatherStack,'↑'+weather.high+'° ↓'+weather.low+'°  ☂ '+weather.rain+'%'+(air?'  '+air:''),9,weather.wind>=40?C.amber:C.muted);
 }
 else{txt(weatherStack,'Погода недоступна',11,C.amber);txt(weatherStack,'Проверь геолокацию',9,C.muted);}
 summary.addSpacer();
