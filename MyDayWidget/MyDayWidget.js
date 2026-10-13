@@ -70,7 +70,8 @@ async function hkWarnings(pos){
 }
 async function getWeather(){
   const cache=readCache();
-  if(cache.ts && Date.now()-cache.ts<WEATHER_CACHE_MINUTES*60000 && cache.data)return cache.data;
+  // Кэш старого формата (без ветра) считаем устаревшим
+  if(cache.ts && Date.now()-cache.ts<WEATHER_CACHE_MINUTES*60000 && cache.data && cache.data.wind!=null)return cache.data;
   try{
     const pos=await getPosition(cache);
     if(!pos)throw new Error('no position');
