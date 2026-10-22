@@ -1,4 +1,4 @@
-// BodyWidget v1.4 — Scriptable medium widget
+// BodyWidget v1.5 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -55,6 +55,8 @@ function num(v, sumList = true) {
 // Даты отрезков сна приходят текстом: «Oct 22, 2026 at 1:23 AM», «22 Oct 2026 at 01:23», ISO.
 const MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
 function parseLooseDate(x) {
+  if (x instanceof Date) return isNaN(x) ? null : x;
+  if (typeof x === "number") return new Date(x > 1e12 ? x : x * 1000);
   const t = String(x).replace(/[  ]/g, " ").trim();
   if (/^\d{4}-\d{2}-\d{2}T/.test(t)) { const d = new Date(t); return isNaN(d) ? null : d; }
   const mon = t.toLowerCase().match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*/);
@@ -80,6 +82,7 @@ function parseLooseDate(x) {
 }
 function listOf(v) {
   if (Array.isArray(v)) return v;
+  if (v instanceof Date) return [v];
   if (v == null) return [];
   return String(v).split(/[\r\n]+/).map(x => x.trim()).filter(Boolean);
 }
@@ -129,7 +132,7 @@ function unpack(p) {
     const ds = st.map(parseLooseDate).concat(en.map(parseLooseDate)).map(d => d.getTime());
     const hm = t => { const d = new Date(t); return pad(d.getHours()) + ":" + pad(d.getMinutes()) + " " + d.getDate() + "." + (d.getMonth() + 1); };
     how = "интервалы " + st.length + " шт, " + hm(Math.min(...ds)) + " → " + hm(Math.max(...ds));
-  } else if (!st.length) how = "нет sleepStart в словаре; пришли ключи: " + (Object.keys(v).join(", ") || "ничего");
+  } else if (!st.length) how = "нет sleepStart; пришло: " + Object.keys(v).map(k => k + "=" + (v[k] === null ? "null" : Array.isArray(v[k]) ? "list" + v[k].length : typeof v[k])).join(", ");
   else how = "даты не прочитаны (" + st.length + "/" + en.length + "): «" + st[0] + "»";
   if (sleepMin == null) sleepMin = clockMin(sleepRaw);
   if (sleepMin == null) {
