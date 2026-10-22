@@ -1,4 +1,4 @@
-// BodyWidget v1 — Scriptable medium widget
+// BodyWidget v1.1 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -52,18 +52,36 @@ function num(v, sumList = true) {
   return m ? Number(m[0]) : null;
 }
 
+// Команды отдают длительность отрезков сна как «16:00» (мм:сс) или «1:05:00» (ч:мм:сс),
+// списком через перевод строки. Суммируем в минуты.
+function clockMin(v) {
+  const parts = Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(/[\r\n]+/) : [];
+  const xs = parts.map(x => x.trim()).filter(Boolean);
+  if (!xs.length || !xs.every(x => /^\d+(:\d{1,2}){1,2}$/.test(x))) return null;
+  let sec = 0;
+  for (const x of xs) {
+    const n = x.split(":").map(Number);
+    sec += n.length === 3 ? n[0] * 3600 + n[1] * 60 + n[2] : n[0] * 60 + n[1];
+  }
+  return sec / 60;
+}
+
 function unpack(p) {
   let v = p;
   if (typeof v === "string") { try { v = JSON.parse(v); } catch (_) { v = {}; } }
   if (!v || typeof v !== "object") v = {};
   const pick = (...keys) => { for (const k of keys) if (v[k] != null) return v[k]; return null; };
   const steps = num(pick("steps", "Steps", "шаги"));
-  let sleepMin = num(pick("sleepMin", "sleep", "Sleep", "сон"));
-  const sleepH = num(pick("sleepHours"));
-  if (sleepMin == null && sleepH != null) sleepMin = sleepH * 60;
-  // Длительность может прийти в секундах, минутах или часах.
-  if (sleepMin != null && sleepMin > 1440) sleepMin = sleepMin / 60;
-  else if (sleepMin != null && sleepMin > 0 && sleepMin < 24) sleepMin = sleepMin * 60;
+  const sleepRaw = pick("sleepMin", "sleep", "Sleep", "сон");
+  let sleepMin = clockMin(sleepRaw);
+  if (sleepMin == null) {
+    sleepMin = num(sleepRaw);
+    const sleepH = num(pick("sleepHours"));
+    if (sleepMin == null && sleepH != null) sleepMin = sleepH * 60;
+    // Длительность может прийти в секундах, минутах или часах.
+    if (sleepMin != null && sleepMin > 1440) sleepMin = sleepMin / 60;
+    else if (sleepMin != null && sleepMin > 0 && sleepMin < 24) sleepMin = sleepMin * 60;
+  }
   const restingHR = num(pick("restingHR", "rhr", "RestingHR", "пульс"), false);
   return {
     steps: steps != null && steps >= 0 && steps < 200000 ? Math.round(steps) : null,
