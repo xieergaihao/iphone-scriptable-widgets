@@ -1,4 +1,4 @@
-// BodyWidget v1.1 — Scriptable medium widget
+// BodyWidget v1.2 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -52,6 +52,52 @@ function num(v, sumList = true) {
   return m ? Number(m[0]) : null;
 }
 
+// Даты отрезков сна приходят текстом: «Oct 22, 2026 at 1:23 AM», «22 Oct 2026 at 01:23», ISO.
+const MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+function parseLooseDate(x) {
+  const t = String(x).replace(/[  ]/g, " ").trim();
+  if (/^\d{4}-\d{2}-\d{2}T/.test(t)) { const d = new Date(t); return isNaN(d) ? null : d; }
+  const mon = t.toLowerCase().match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*/);
+  const tm = t.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([AaPp][Mm])?/);
+  const rest = t.replace(tm ? tm[0] : "", " ");
+  const nums = (rest.match(/\d+/g) || []).map(Number);
+  let y, m, d;
+  if (mon) {
+    m = MONTHS.indexOf(mon[1]);
+    y = nums.find(n => n > 1900); d = nums.find(n => n >= 1 && n <= 31);
+  } else {
+    const dm = rest.match(/(\d{1,4})[./-](\d{1,2})[./-](\d{1,4})/);
+    if (!dm) return null;
+    const a = dm.slice(1, 4).map(Number);
+    if (a[0] > 1900) { y = a[0]; m = a[1] - 1; d = a[2]; } else { d = a[0]; m = a[1] - 1; y = a[2] < 100 ? 2000 + a[2] : a[2]; }
+  }
+  if (y == null || d == null || m < 0 || !tm) return null;
+  let h = Number(tm[1]);
+  const ap = (tm[4] || "").toLowerCase();
+  if (ap === "pm" && h < 12) h += 12;
+  if (ap === "am" && h === 12) h = 0;
+  return new Date(y, m, d, h, Number(tm[2]), Number(tm[3] || 0));
+}
+function listOf(v) {
+  if (Array.isArray(v)) return v;
+  if (v == null) return [];
+  return String(v).split(/[\r\n]+/).map(x => x.trim()).filter(Boolean);
+}
+// Отрезки сна из разных источников и фаз перекрываются. Склеиваем интервалы и считаем
+// реальное время сна, без двойного счёта.
+function mergedSleepMin(starts, ends) {
+  const a = listOf(starts).map(parseLooseDate), b = listOf(ends).map(parseLooseDate);
+  if (!a.length || a.length !== b.length || a.some(x => !x) || b.some(x => !x)) return null;
+  const iv = a.map((s, i) => [s.getTime(), b[i].getTime()]).filter(([s, e]) => e > s).sort((p, q) => p[0] - q[0]);
+  let total = 0, cs = null, ce = null;
+  for (const [s, e] of iv) {
+    if (cs == null || s > ce) { if (cs != null) total += ce - cs; cs = s; ce = e; }
+    else if (e > ce) ce = e;
+  }
+  if (cs != null) total += ce - cs;
+  return total / 60000;
+}
+
 // Команды отдают длительность отрезков сна как «16:00» (мм:сс) или «1:05:00» (ч:мм:сс),
 // списком через перевод строки. Суммируем в минуты.
 function clockMin(v) {
@@ -73,7 +119,8 @@ function unpack(p) {
   const pick = (...keys) => { for (const k of keys) if (v[k] != null) return v[k]; return null; };
   const steps = num(pick("steps", "Steps", "шаги"));
   const sleepRaw = pick("sleepMin", "sleep", "Sleep", "сон");
-  let sleepMin = clockMin(sleepRaw);
+  let sleepMin = mergedSleepMin(pick("sleepStart"), pick("sleepEnd"));
+  if (sleepMin == null) sleepMin = clockMin(sleepRaw);
   if (sleepMin == null) {
     sleepMin = num(sleepRaw);
     const sleepH = num(pick("sleepHours"));
