@@ -1,4 +1,4 @@
-// BodyWidget v1.2 — Scriptable medium widget
+// BodyWidget v1.3 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -120,6 +120,14 @@ function unpack(p) {
   const steps = num(pick("steps", "Steps", "шаги"));
   const sleepRaw = pick("sleepMin", "sleep", "Sleep", "сон");
   let sleepMin = mergedSleepMin(pick("sleepStart"), pick("sleepEnd"));
+  const st = listOf(pick("sleepStart")), en = listOf(pick("sleepEnd"));
+  let how;
+  if (sleepMin != null) {
+    const ds = st.map(parseLooseDate).concat(en.map(parseLooseDate)).map(d => d.getTime());
+    const hm = t => { const d = new Date(t); return pad(d.getHours()) + ":" + pad(d.getMinutes()) + " " + d.getDate() + "." + (d.getMonth() + 1); };
+    how = "интервалы " + st.length + " шт, " + hm(Math.min(...ds)) + " → " + hm(Math.max(...ds));
+  } else if (!st.length) how = "нет sleepStart в словаре";
+  else how = "даты не прочитаны (" + st.length + "/" + en.length + "): «" + st[0] + "»";
   if (sleepMin == null) sleepMin = clockMin(sleepRaw);
   if (sleepMin == null) {
     sleepMin = num(sleepRaw);
@@ -133,6 +141,7 @@ function unpack(p) {
   return {
     steps: steps != null && steps >= 0 && steps < 200000 ? Math.round(steps) : null,
     sleepMin: sleepMin != null && sleepMin > 0 && sleepMin <= 1440 ? Math.round(sleepMin) : null,
+    how,
     restingHR: restingHR != null && restingHR >= 25 && restingHR <= 150 ? Math.round(restingHR) : null
   };
 }
@@ -154,7 +163,8 @@ function ingest(param) {
   for (const k of Object.keys(days)) if (k < cutoff) delete days[k];
   writeJSON(dataPath, days);
   const d = days[key];
-  return "Записано: сон " + fmtSleep(d.sleepMin) + ", шаги " + (d.steps ?? "—") + ", пульс " + (d.restingHR ?? "—");
+  return "Записано: сон " + fmtSleep(d.sleepMin) + ", шаги " + (d.steps ?? "—") + ", пульс " + (d.restingHR ?? "—") +
+    "\n[сон: " + v.how + "]";
 }
 
 function fmtSleep(min) {
