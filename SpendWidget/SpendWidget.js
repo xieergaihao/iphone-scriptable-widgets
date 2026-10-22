@@ -1,4 +1,4 @@
-const VERSION = "1.7";
+const VERSION = "1.8";
 const FOLDER = "SpendWidget-data-v1";
 const MAX_TEXT = 8192;
 const DUPLICATE_WINDOW_MS = 120000;
@@ -92,6 +92,12 @@ function sourceName(s) {
 
   if (/^(wechat|wechat pay|weixin|微信|微信支付)$/.test(n))
     return "WeChat";
+
+  if (/^(payme|payme by hsbc|payme from hsbc)$/.test(n))
+    return "PayMe";
+
+  if (/^(wallet|apple wallet|apple pay|transaction)$/.test(n))
+    return "Wallet";
 
   return "Unknown";
 }
@@ -620,6 +626,27 @@ function unpackInput(value) {
         : app
     );
 
+    // Автоматизация «Транзакция» из Wallet передаёт готовые поля:
+    // amount, merchant, card. Тогда текст разбирать не нужно.
+    const amount = v.amount ?? v.Amount;
+    if (amount != null && String(amount).trim()) {
+      const merchant = normalize(textValue(v.merchant ?? v.Merchant ?? ""));
+      const card = normalize(textValue(v.card ?? v.Card ?? ""));
+      if (source === "Unknown")
+        source = /octopus|八達通/i.test(card) ? "Octopus" : "Wallet";
+      const rawText = [card, String(amount), merchant].filter(Boolean).join(" · ");
+      return {
+        source,
+        raw: rawText.slice(0, MAX_TEXT),
+        tooLong: false,
+        structured: {
+          amount: String(amount),
+          currency: textValue(v.currency ?? v.Currency ?? ""),
+          merchant
+        }
+      };
+    }
+
     raw = textValue(v);
   } else {
     raw = textValue(v);
@@ -679,6 +706,69 @@ function parseNotification(input) {
       return review(input.source + ": разбор выключен в настройках");
 
     return parseChinaPay(raw, input.source);
+  }
+
+  // WALLET / готовые поля (сумма, магазин)
+  if (input.structured) {
+    const st = input.structured;
+    const curText = (st.currency + " " + st.amount).toUpperCase();
+    let currency = currencyCode(st.currency) ||
+      (/HK\$|HKD/.test(curText) ? "HKD" :
+        /CN[¥￥]|RMB|CNY|[¥￥]/.test(curText) ? "CNY" :
+        /US\$|USD/.test(curText) ? "USD" : "HKD");
+    const m = String(st.amount).replace(/[\s\u00a0]/g, "")
+      .match(/-?\d[\d,]*(?:\.\d+)?/);
+    if (!m) return review("Wallet: сумма не найдена");
+    const value = m[0].replace(/,/g, "");
+    if (value.startsWith("-"))
+      return review("Wallet: возврат или пополнение");
+    if (Number(value) === 0)
+      return { status: "ignored", reason: "Нулевая сумма" };
+    let amountMinor;
+    try {
+      const dp = DECIMALS[currency];
+      amountMinor = parseMinor(
+        Number(value).toFixed(dp), currency
+      );
+    } catch (e) {
+      return review(e.message);
+    }
+    const merchant = st.merchant ||
+      (input.source === "Octopus" ? "Transport" : input.source);
+    if (/top[ -]?up|add[ -]?value|增值|充值/i.test(merchant))
+      return review("Пополнение: не расход");
+    return {
+      status: "expense",
+      currency,
+      amountMinor,
+      merchant: merchant.slice(0, 240),
+      reason: "Транзакция Wallet (" + input.source + ")"
+    };
+  }
+
+  // PAYME: «You paid HK$50.00 to Shop» / «Payment of HK$50.00 to Shop»
+  if (input.source === "PayMe") {
+    if (/\b(received|sent you|refund(?:ed)?|top[ -]?up|added|cash ?out|withdraw)/i.test(raw))
+      return review("PayMe: поступление, возврат или пополнение");
+    const pm = raw.match(/(?:paid|payment of|spent|pay)\s*(?:HK\$|HKD)\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)\s*(?:to|at)\s+(.+?)(?=[.。!]|\s+on\s|$)/i);
+    if (!pm) {
+      if (/\bsent\b/i.test(raw))
+        return review("PayMe: перевод человеку — проверь");
+      return review("PayMe: неизвестный формат");
+    }
+    let amountMinor;
+    try {
+      amountMinor = parseMinor(pm[1], "HKD");
+    } catch (e) {
+      return review(e.message);
+    }
+    return {
+      status: "expense",
+      currency: "HKD",
+      amountMinor,
+      merchant: normalize(pm[2]).slice(0, 240),
+      reason: "Распознано PayMe"
+    };
   }
 
   // OCTOPUS

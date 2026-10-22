@@ -58,6 +58,17 @@ check('CNY base converts HKD and keeps CNY',()=>{
  assert(ctx.shortHKD(5).startsWith('¥'));
  ctx.saveSettings({base:'HKD'});assert(ctx.shortHKD(5).startsWith('HK$'));
 });
+check('Wallet transaction and PayMe',()=>{
+ const w=ctx.unpackInput({amount:'HK$12.40',merchant:'MTR',card:'Octopus'});assert.equal(w.source,'Octopus');
+ let p=ctx.parseNotification(w);assert.equal(p.status,'expense');assert.equal(p.amountMinor,1240);assert.equal(p.currency,'HKD');assert.equal(p.merchant,'MTR');assert.equal(ctx.categoryOf(p.merchant),'Транспорт');
+ p=ctx.parseNotification(ctx.unpackInput({source:'Octopus',amount:'5.3',merchant:''}));assert.equal(p.amountMinor,530);assert.equal(p.merchant,'Transport');
+ p=ctx.parseNotification(ctx.unpackInput({amount:'¥25',merchant:'Lawson',card:'Mox'}));assert.equal(p.currency,'CNY');assert.equal(p.amountMinor,2500);
+ assert.equal(ctx.parseNotification(ctx.unpackInput({amount:'-100',card:'Octopus'})).status,'review');
+ p=parse('PayMe','You paid HK$58.00 to Tai Hing.');assert.equal(p.status,'expense');assert.equal(p.amountMinor,5800);assert.equal(p.merchant,'Tai Hing');
+ assert.equal(parse('PayMe','Alex sent you HK$100.00').status,'review');
+ assert.equal(parse('PayMe','You sent HK$100.00 to Alex').status,'review');
+ assert.equal(ctx.sourceName('PayMe'),'PayMe');
+});
 check('Refund and FX totals',()=>{const events=[{day:'2026-10-01',status:'expense',currency:'HKD',amountMinor:1000},{day:'2026-10-01',status:'refund',currency:'HKD',amountMinor:200},{day:'2026-10-01',status:'expense',currency:'JPY',amountMinor:2000}];assert.equal(ctx.hkdSummary(events,'2026-10-01',{rates:{JPY:20}}).sums.today,108)});
 const nodes=[];
 class Node {
