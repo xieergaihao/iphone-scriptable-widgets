@@ -1,4 +1,4 @@
-// BodyWidget v1.5 — Scriptable medium widget
+// BodyWidget v1.6 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -134,7 +134,12 @@ function unpack(p) {
     how = "интервалы " + st.length + " шт, " + hm(Math.min(...ds)) + " → " + hm(Math.max(...ds));
   } else if (!st.length) how = "нет sleepStart; пришло: " + Object.keys(v).map(k => k + "=" + (v[k] === null ? "null" : Array.isArray(v[k]) ? "list" + v[k].length : typeof v[k])).join(", ");
   else how = "даты не прочитаны (" + st.length + "/" + en.length + "): «" + st[0] + "»";
-  if (sleepMin == null) sleepMin = clockMin(sleepRaw);
+  if (sleepMin == null) {
+    sleepMin = clockMin(sleepRaw);
+    // Health отдаёт каждый отрезок сна дважды (два источника), сумма удвоена.
+    // Больше 11 ч за ночь — считаем дублем и делим пополам.
+    if (sleepMin != null && sleepMin > 660) { sleepMin = sleepMin / 2; how = "сумма отрезков / 2"; }
+  }
   if (sleepMin == null) {
     sleepMin = num(sleepRaw);
     const sleepH = num(pick("sleepHours"));
