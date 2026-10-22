@@ -44,6 +44,9 @@ function num(v, sumList = true) {
     return sumList ? xs.reduce((a, b) => a + b, 0) : xs[xs.length - 1];
   }
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  // Команды отдают список значений строкой через перевод строки: «3454\n0».
+  if (typeof v === "string" && /[\r\n]/.test(v.trim()))
+    return num(v.split(/[\r\n]+/).filter(x => x.trim()), sumList);
   const s = String(v).replace(/[\s  ]/g, "").replace(/,(?=\d{3}\b)/g, "").replace(",", ".");
   const m = s.match(/-?\d+(?:\.\d+)?/);
   return m ? Number(m[0]) : null;
