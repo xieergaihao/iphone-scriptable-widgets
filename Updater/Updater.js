@@ -1,10 +1,20 @@
-// Updater v2: ставит свежие скрипты из GitHub.
+// Updater v3: ставит свежие скрипты из GitHub.
 // Находит скрипт по содержимому, а не только по имени:
 // если QuickActions у тебя лежит как «Untitled Script», обновит его.
 // Историю расходов не трогает.
 
-const RAW =
-  "https://raw.githubusercontent.com/xieergaihao/iphone-scriptable-widgets/main/";
+const REPO = "xieergaihao/iphone-scriptable-widgets";
+// raw.githubusercontent кэширует ветку main ~5 минут. Берём точный коммит,
+// чтобы сразу получать последнюю версию.
+let REF = "main";
+try {
+  const r = new Request("https://api.github.com/repos/" + REPO + "/commits/main");
+  r.headers = { "Accept": "application/vnd.github.sha" };
+  r.timeoutInterval = 10;
+  const sha = (await r.loadString()).trim();
+  if (/^[0-9a-f]{40}$/.test(sha)) REF = sha;
+} catch (_) {}
+const RAW = "https://raw.githubusercontent.com/" + REPO + "/" + REF + "/";
 
 // [путь в репозитории, имя по умолчанию, признак в коде]
 const FILES = [
