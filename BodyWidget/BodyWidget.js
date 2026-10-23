@@ -1,4 +1,4 @@
-// BodyWidget v1.7 — Scriptable medium widget
+// BodyWidget v1.8 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -288,7 +288,9 @@ function render() {
   txt(w, "сон за 7 ночей · пунктир — цель " + (s.sleepGoalMin / 60).toFixed(1).replace(".0", "") + " ч", 8, C.soft);
 
   // Обновляем картинку часто не нужно: данные приходят только из команды.
-  w.refreshAfterDate = new Date(Date.now() + 60 * 60000);
+  // Просим iOS перерисовать через 15 мин; после запусков команды (9:00, 13:00, 21:00)
+  // виджет подхватит новые данные при ближайшей перерисовке.
+  w.refreshAfterDate = new Date(Date.now() + 15 * 60000);
   return w;
 }
 
