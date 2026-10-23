@@ -1,4 +1,4 @@
-// BodyWidget v1.6 — Scriptable medium widget
+// BodyWidget v1.7 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -226,7 +226,9 @@ function render() {
   const w = new ListWidget();
   w.backgroundColor = new Color(C.bg);
   w.setPadding(12, 14, 10, 14);
-  w.url = "fitbit://";
+  // Тап по виджету запускает команду обновления (имя — в Parameter виджета).
+  const sc = String(args.widgetParameter || "").trim() || "Body update";
+  w.url = "shortcuts://run-shortcut?name=" + encodeURIComponent(sc);
 
   const head = w.addStack();
   head.centerAlignContent();
@@ -241,7 +243,7 @@ function render() {
   const sleepAvg = avg(prev.map(d => d.sleepMin));
   const sleepOk = today.sleepMin != null && today.sleepMin >= s.sleepGoalMin;
   tile(row, "СОН", today.sleepMin != null ? Math.floor(today.sleepMin / 60) + "ч " + pad(today.sleepMin % 60) : "—",
-    sleepAvg != null ? "ср. 7д " + Math.floor(sleepAvg / 60) + "ч " + pad(Math.round(sleepAvg % 60)) : "цель " + Math.round(s.sleepGoalMin / 6) / 10 + " ч",
+    sleepAvg != null ? "в ср. " + Math.floor(sleepAvg / 60) + "ч " + pad(Math.round(sleepAvg % 60)) : "цель " + Math.round(s.sleepGoalMin / 6) / 10 + " ч",
     today.sleepMin == null ? C.soft : sleepOk ? C.mint : C.warn);
   row.addSpacer();
   // Шаги
