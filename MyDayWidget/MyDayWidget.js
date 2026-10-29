@@ -1,4 +1,4 @@
-// MyDay v6 — Scriptable medium widget
+// MyDay v7 — Scriptable medium widget
 // Work calendar, today's weather, next nonempty day when today's meetings are over.
 // Set the exact calendar title in this field or in the widget Parameter.
 const WORK_CALENDAR_NAME = String(args.widgetParameter || '').trim();
@@ -96,14 +96,27 @@ async function getAgenda(){
     if(seen.has(key))return false;seen.add(key);return true;
   }).sort((a,b)=>a.startDate-b.startDate);
   const todayAll=valid.filter(e=>e.startDate>=first && e.startDate<addDays(first,1));
+  const tomorrowFirst=valid.find(e=>e.startDate>=addDays(first,1) && e.startDate<addDays(first,2))||null;
   const todayUpcoming=todayAll.filter(e=>e.endDate>now);
-  if(todayUpcoming.length)return {date:first,events:todayUpcoming,count:todayAll.length,isToday:true,todayAll};
+  if(todayUpcoming.length)return {date:first,events:todayUpcoming,count:todayAll.length,isToday:true,todayAll,tomorrowFirst};
   for(let offset=1;offset<=DAYS_AHEAD;offset++){
     const d=addDays(first,offset), next=addDays(d,1);
     const dayEvents=valid.filter(e=>e.startDate>=d && e.startDate<next);
     if(dayEvents.length)return {date:d,events:dayEvents,count:dayEvents.length,isToday:false,todayAll};
   }
   return {date:first,events:[],count:todayAll.length,isToday:true,finished:todayAll.length>0,todayAll};
+}
+// Свободное окно до следующей встречи (с текущего момента или с конца текущей)
+function dur(min){const h=Math.floor(min/60),m=min%60;return [h?h+' ч':'',m||!h?m+' мин':''].filter(Boolean).join(' ');}
+function freeWindow(agenda){
+  if(!agenda||!agenda.isToday)return null;
+  const active=agenda.events.find(e=>e.startDate<=now&&e.endDate>now);
+  const next=agenda.events.find(e=>e.startDate>now);
+  if(!next)return null;
+  const from=active?active.endDate:now;
+  const min=Math.round((next.startDate-from)/60000);
+  if(min<15)return null;
+  return (active?'после: окно ':'свободно ')+dur(min);
 }
 // Следующее обновление: ближайшее начало/конец встречи, но не реже чем раз в 30 мин
 function nextRefresh(agenda){
@@ -156,7 +169,11 @@ widget.addSpacer(6);
 if(agendaError){txt(widget,agendaError,10,C.amber);txt(widget,'Проверь доступ Scriptable к календарю',9,C.muted);}
 else if(!agenda.events.length){txt(widget,agenda.finished?'Сегодня все встречи завершены':'В ближайшие 7 дней встреч нет',11,C.white);txt(widget,'Нажми, чтобы открыть календарь',9,C.muted);}
 else{
-  txt(widget,agenda.isToday?'СЕГОДНЯ · РАСПИСАНИЕ':dayLabel(agenda.date),9,C.mint,true);
+  const hdr=widget.addStack();hdr.centerAlignContent();
+  txt(hdr,agenda.isToday?'СЕГОДНЯ · РАСПИСАНИЕ':dayLabel(agenda.date),9,C.mint,true);
+  hdr.addSpacer();
+  const fw=freeWindow(agenda);
+  if(fw)txt(hdr,fw,9,C.amber,true);
   widget.addSpacer(5);
   let firstUpcoming=true;
   for(const e of agenda.events.slice(0,3)){
@@ -178,6 +195,11 @@ else{
     widget.addSpacer(4);
   }
   if(agenda.events.length>3)txt(widget,'Ещё '+(agenda.events.length-3)+' встреч · открыть календарь',9,C.muted);
+  // Когда сегодня мало встреч, внизу — первая встреча завтра
+  else if(agenda.isToday&&agenda.tomorrowFirst){
+    const t=agenda.tomorrowFirst;
+    txt(widget,'Завтра первая: '+hhmm(t.startDate)+' · '+(t.title||'Без названия'),9,C.muted);
+  }
 }
 widget.refreshAfterDate=nextRefresh(agenda);
 Script.setWidget(widget);
