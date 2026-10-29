@@ -1,4 +1,4 @@
-// MyDay v9 — Scriptable medium widget
+// MyDay v10 — Scriptable medium widget
 // Work calendar, today's weather, next nonempty day when today's meetings are over.
 // Set the exact calendar title in this field or in the widget Parameter.
 const WORK_CALENDAR_NAME = String(args.widgetParameter || '').trim();
@@ -158,24 +158,34 @@ const summary=widget.addStack();summary.centerAlignContent();
 const weatherStack=summary.addStack();weatherStack.layoutVertically();
 const weather=await getWeather();
 if(weather){
+  const GAP=11; // расстояние между показателями
+  // Показатель: иконка SF Symbol + текст, с отступом от предыдущего
+  const metric=(stack,symbol,text,color,first)=>{
+    if(!first)stack.addSpacer(GAP);
+    const im=stack.addImage(SFSymbol.named(symbol).image);im.imageSize=new Size(9,9);im.tintColor=new Color(color);
+    stack.addSpacer(3);txt(stack,text,9,color);
+  };
   const top=weatherStack.addStack();top.bottomAlignContent();
   txt(top,weather.temp+'°  '+condition(weather.code),15,C.white,true);
-  if(weather.sunset){
-    top.addSpacer(8);
-    const si=top.addImage(SFSymbol.named('sunset.fill').image);si.imageSize=new Size(11,11);si.tintColor=new Color(C.muted);
-    top.addSpacer(2);txt(top,weather.sunset,9,C.muted);
-  }
-  if(weather.aqhi!=null){
-    top.addSpacer(6);
-    txt(top,'AQHI '+weather.aqhi,9,weather.aqhi>=AQHI_ALERT?C.amber:weather.aqhi<=3?C.mint:C.muted,true);
-  }
-  // Ветер и влажность; в старом кэше их нет — строка появится после обновления погоды
-  const air=[weather.wind!=null?'💨 '+weather.wind+' м/с':null,weather.hum!=null?'💧 '+weather.hum+'%':null].filter(Boolean).join('  ');
+  if(weather.sunset){top.addSpacer(12);const si=top.addImage(SFSymbol.named('sunset.fill').image);si.imageSize=new Size(11,11);si.tintColor=new Color(C.muted);top.addSpacer(3);txt(top,weather.sunset,9,C.muted);}
+  if(weather.aqhi!=null){top.addSpacer(10);txt(top,'AQHI '+weather.aqhi,9,weather.aqhi>=AQHI_ALERT?C.amber:weather.aqhi<=3?C.mint:C.muted,true);}
+  weatherStack.addSpacer(3);
   const warn=(weather.warnings||[]).concat(weather.aqhi>=AQHI_ALERT?['воздух '+weather.aqhi+' — не бегай на улице']:[]).join(' · ');
-  if(warn)txt(weatherStack,'⚠ '+warn,9,C.amber,true);
-  else if(weather.rain>=RAIN_ALERT)txt(weatherStack,'☂ возьми зонт · '+weather.rain+'%'+(air?'  '+air:''),9,C.amber);
-  else if(weather.tmr&&now.getHours()>=TOMORROW_FROM_HOUR){const t=weather.tmr;txt(weatherStack,'завтра ↑'+t.high+'° ↓'+t.low+'°  ☂ '+t.rain+'%  💨 до '+t.wind+' м/с',9,t.rain>=RAIN_ALERT||t.wind>=WIND_ALERT?C.amber:C.muted);}
-  else txt(weatherStack,'↑'+weather.high+'° ↓'+weather.low+'°  ☂ '+weather.rain+'%'+(air?'  '+air:''),9,weather.wind>=WIND_ALERT?C.amber:C.muted);
+  const line=weatherStack.addStack();line.centerAlignContent();
+  const evening=weather.tmr&&now.getHours()>=TOMORROW_FROM_HOUR;
+  if(warn)txt(line,'⚠ '+warn,9,C.amber,true);
+  else if(evening){
+    const t=weather.tmr,c=t.rain>=RAIN_ALERT||t.wind>=WIND_ALERT?C.amber:C.muted;
+    txt(line,'завтра',9,c,true);line.addSpacer(GAP-4);
+    metric(line,'thermometer.medium',t.high+'°/'+t.low+'°',c,true);
+    metric(line,'umbrella.fill',t.rain+'%',t.rain>=RAIN_ALERT?C.amber:C.muted);
+    metric(line,'wind',t.wind+' м/с',t.wind>=WIND_ALERT?C.amber:C.muted);
+  }else{
+    metric(line,'thermometer.medium',weather.high+'°/'+weather.low+'°',C.muted,true);
+    metric(line,'umbrella.fill',weather.rain+'%',weather.rain>=RAIN_ALERT?C.amber:C.muted);
+    if(weather.wind!=null)metric(line,'wind',weather.wind+' м/с',weather.wind>=WIND_ALERT?C.amber:C.muted);
+    if(weather.hum!=null)metric(line,'humidity.fill',weather.hum+'%',C.muted);
+  }
 }
 else{txt(weatherStack,'Погода недоступна',11,C.amber);txt(weatherStack,'Проверь геолокацию',9,C.muted);}
 summary.addSpacer();

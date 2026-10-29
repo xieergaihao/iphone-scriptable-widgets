@@ -1,4 +1,4 @@
-// BodyWidget v2.0 — Scriptable medium widget
+// BodyWidget v2.1 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -226,7 +226,7 @@ function render() {
   w.backgroundColor = new Color(C.bg);
   w.setPadding(12, 14, 10, 14);
   // Тап по виджету запускает команду обновления (имя — в Parameter виджета).
-  const sc = String(args.widgetParameter || "").trim() || "Body update";
+  const sc = String(args.widgetParameter || "").trim() || "Health";
   w.url = "shortcuts://run-shortcut?name=" + encodeURIComponent(sc);
 
   const head = w.addStack();
@@ -234,7 +234,11 @@ function render() {
   txt(head, "ТЕЛО  /  СЕГОДНЯ", 10, C.mint, true);
   head.addSpacer();
   const upd = today.updatedAt ? new Date(today.updatedAt) : null;
-  txt(head, upd ? "обновлено " + pad(upd.getHours()) + ":" + pad(upd.getMinutes()) : "нет данных за сегодня", 9, upd ? C.soft : C.warn);
+  // Две последние ночи без сна при свежих шагах — Google Health перестал писать сон в Health
+  const yest = week[5] || {};
+  const syncBroken = upd && today.sleepMin == null && yest.sleepMin == null && (today.steps != null || yest.steps != null);
+  if (syncBroken) txt(head, "сна нет 2 ночи — открой Google Health", 9, C.warn, true);
+  else txt(head, upd ? "обновлено " + pad(upd.getHours()) + ":" + pad(upd.getMinutes()) : "нет данных за сегодня", 9, upd ? C.soft : C.warn);
   w.addSpacer(8);
 
   const row = w.addStack();
