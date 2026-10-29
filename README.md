@@ -57,6 +57,10 @@ node tests/verify-myday.cjs
 
 Автоматизации «Время суток» в 8:00, 13:00 и 21:00 запускают эту команду. Виджет — средний Scriptable → BodyWidget. Тап открывает Google Health. Цели шагов и сна — в меню скрипта. HRV Google Health в Apple Health пока не передаёт.
 
+## SpendWidget CN (юани, только Alipay)
+
+`SpendWidget/SpendWidget-CN.js` — готовая версия для телефона, где платят только Alipay: итоги в CNY, Alipay считается расходом, WeChat игнорируется. Понимает уведомления «交易提醒 你有一笔 X 元的支出» (рекламный «领2元红包» не считается), «退款提醒» отправляет на проверку. Автоматизация: Notification → приложение Alipay → Run Script → SpendWidget, Parameter = Shortcut Input, Show When Run выключен.
+
 ## SpendWidget для расходов в юанях (Alipay / WeChat Pay)
 
 С версии 1.7 в меню SpendWidget есть «Настройки: валюта и Alipay/WeChat». Для телефона, где основные траты в Китае:

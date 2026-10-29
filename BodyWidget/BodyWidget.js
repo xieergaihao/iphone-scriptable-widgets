@@ -1,4 +1,4 @@
-// BodyWidget v1.8 — Scriptable medium widget
+// BodyWidget v1.9 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -260,10 +260,10 @@ function render() {
   }
   tile(row, "ПУЛЬС ПОКОЯ", today.restingHR != null ? today.restingHR + " уд" : "—", hrSub, hrColor);
 
-  w.addSpacer(8);
+  w.addSpacer(4);
 
   // Сон за 7 ночей: столбики, цель — пунктир
-  const W = 610, H = 64, top = 4, bottom = 46, bw = 32;
+  const W = 610, H = 80, top = 22, bottom = 58, bw = 32;
   const ctx = new DrawContext();
   ctx.size = new Size(W, H);
   ctx.opaque = false;
@@ -273,17 +273,24 @@ function render() {
   const goalY = bottom - (s.sleepGoalMin / max) * (bottom - top);
   ctx.setFillColor(new Color(C.soft, 0.5));
   for (let x = 0; x < W; x += 14) ctx.fillRect(new Rect(x, goalY, 7, 1.5));
+  ctx.setTextAlignedCenter();
   week.forEach((d, i) => {
     const h = d.sleepMin ? Math.max(4, (d.sleepMin / max) * (bottom - top)) : 3;
     ctx.setFillColor(new Color(i === 6 ? C.mint : (d.sleepMin && d.sleepMin < s.sleepGoalMin ? C.warn : C.bar)));
     ctx.fillRect(new Rect(i * cell + (cell - bw) / 2, bottom - h, bw, h));
+    // Подпись над столбиком: часы:минуты сна
+    if (d.sleepMin) {
+      ctx.setFont(Font.semiboldSystemFont(15));
+      ctx.setTextColor(new Color(C.text));
+      ctx.drawTextInRect(Math.floor(d.sleepMin / 60) + ":" + pad(d.sleepMin % 60),
+        new Rect(i * cell, bottom - h - 19, cell, 18));
+    }
     ctx.setFont(Font.mediumSystemFont(16));
     ctx.setTextColor(new Color(C.soft));
-    ctx.setTextAlignedCenter();
-    ctx.drawTextInRect(d.key.slice(8), new Rect(i * cell, 48, cell, 18));
+    ctx.drawTextInRect(d.key.slice(8), new Rect(i * cell, 61, cell, 18));
   });
   const img = w.addImage(ctx.getImage());
-  img.imageSize = new Size(305, 32);
+  img.imageSize = new Size(305, 40);
   w.addSpacer(3);
   txt(w, "сон за 7 ночей · пунктир — цель " + (s.sleepGoalMin / 60).toFixed(1).replace(".0", "") + " ч", 8, C.soft);
 

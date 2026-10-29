@@ -1,4 +1,4 @@
-const VERSION = "1.8";
+const VERSION = "1.9";
 const FOLDER = "SpendWidget-data-v1";
 const MAX_TEXT = 8192;
 const DUPLICATE_WINDOW_MS = 120000;
@@ -663,6 +663,10 @@ function unpackInput(value) {
     raw = lines.join("\n");
   }
 
+  // Уведомление Alipay без явного источника: «交易提醒 / 退款提醒 … 一笔 X 元».
+  if (source === "Unknown" && /(交易提醒|退款提醒|一笔\s*[0-9][0-9,.]*\s*元)/.test(raw))
+    source = "Alipay";
+
   return {
     source,
     raw: raw.slice(0, MAX_TEXT),
@@ -882,7 +886,11 @@ function parseChinaPay(raw, source) {
   const re = /(?:[¥￥]|CNY|RMB|人民币)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)|([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元/gi;
 
   const amounts = new Set();
-  for (const m of raw.matchAll(re)) {
+  // Alipay: «你有一笔15.48元的支出，点击领2元电费红包» — берём сумму списания,
+  // рекламные «领2元红包» игнорируем.
+  const main = raw.match(/一笔\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)\s*元\s*的?\s*(?:支出|消费|付款|交易)/);
+  if (main) amounts.add(main[1].replace(/,/g, ""));
+  else for (const m of raw.matchAll(re)) {
     // Остаток («余额¥1,000») не считаем расходом.
     const before = raw.slice(Math.max(0, m.index - 6), m.index);
     if (/余额|余額|balance/i.test(before)) continue;
@@ -953,6 +961,12 @@ function ingest(value) {
   // Пустой запуск автоматизации не засоряет журнал.
   if (!normalize(input.raw))
     return "Пусто: не записано";
+
+  // Octopus в метро: на входе сумма 0, списание приходит на выходе.
+  if (input.structured) {
+    const n = Number(String(input.structured.amount).replace(/[^0-9.\-]/g, ""));
+    if (!n) return "Вход/нулевая сумма: не записано";
+  }
   const e = createEvent(input, now);
 
   saveEvent(e);
