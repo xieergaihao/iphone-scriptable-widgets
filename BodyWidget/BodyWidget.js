@@ -1,4 +1,4 @@
-// BodyWidget v1.9 — Scriptable medium widget
+// BodyWidget v2.0 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -127,18 +127,14 @@ function unpack(p) {
   const sleepRaw = pick("sleepMin", "sleep", "Sleep", "сон");
   let sleepMin = mergedSleepMin(pick("sleepStart", "start", "startDate"), pick("sleepEnd", "end", "endDate"));
   const st = listOf(pick("sleepStart", "start", "startDate")), en = listOf(pick("sleepEnd", "end", "endDate"));
-  let how;
-  if (sleepMin != null) {
-    const ds = st.map(parseLooseDate).concat(en.map(parseLooseDate)).map(d => d.getTime());
-    const hm = t => { const d = new Date(t); return pad(d.getHours()) + ":" + pad(d.getMinutes()) + " " + d.getDate() + "." + (d.getMonth() + 1); };
-    how = "интервалы " + st.length + " шт, " + hm(Math.min(...ds)) + " → " + hm(Math.max(...ds));
-  } else if (!st.length) how = "нет sleepStart; пришло: " + Object.keys(v).map(k => k + "=" + (v[k] === null ? "null" : Array.isArray(v[k]) ? "list" + v[k].length : typeof v[k])).join(", ");
-  else how = "даты не прочитаны (" + st.length + "/" + en.length + "): «" + st[0] + "»";
+  const rawText = sleepRaw == null ? "" : String(sleepRaw).trim();
+  let how = sleepMin != null ? "интервалы" : !("sleepmin" in idx) ? "в команде нет sleepMin" : !rawText ? "в Health нет сна за сутки" : "";
   if (sleepMin == null) {
     sleepMin = clockMin(sleepRaw);
     // Health отдаёт каждый отрезок сна дважды (два источника), сумма удвоена.
     // Больше 11 ч за ночь — считаем дублем и делим пополам.
-    if (sleepMin != null && sleepMin > 660) { sleepMin = sleepMin / 2; how = "сумма отрезков / 2"; }
+    if (sleepMin != null && sleepMin > 660) sleepMin = sleepMin / 2;
+    if (sleepMin != null) how = "отрезки";
   }
   if (sleepMin == null) {
     sleepMin = num(sleepRaw);
@@ -148,6 +144,7 @@ function unpack(p) {
     if (sleepMin != null && sleepMin > 1440) sleepMin = sleepMin / 60;
     else if (sleepMin != null && sleepMin > 0 && sleepMin < 24) sleepMin = sleepMin * 60;
   }
+  if (!how) how = sleepMin != null ? "число" : "не распознано: «" + rawText.slice(0, 24) + "»";
   const restingHR = num(pick("restingHR", "rhr", "RestingHR", "пульс"), false);
   return {
     steps: steps != null && steps >= 0 && steps < 200000 ? Math.round(steps) : null,
@@ -168,6 +165,8 @@ function ingest(param) {
     steps: v.steps != null ? Math.max(v.steps, old.steps || 0) : old.steps,
     sleepMin: v.sleepMin != null ? v.sleepMin : old.sleepMin,
     restingHR: v.restingHR != null ? v.restingHR : old.restingHR,
+    // Почему сна нет — показываем в плитке, чтобы не гадать
+    sleepNote: v.sleepMin != null ? null : (old.sleepMin != null ? null : v.how),
     updatedAt: new Date().toISOString()
   };
   const cutoff = localDay(addDays(new Date(), -KEEP_DAYS));
@@ -243,6 +242,7 @@ function render() {
   const sleepAvg = avg(prev.map(d => d.sleepMin));
   const sleepOk = today.sleepMin != null && today.sleepMin >= s.sleepGoalMin;
   tile(row, "СОН", today.sleepMin != null ? Math.floor(today.sleepMin / 60) + "ч " + pad(today.sleepMin % 60) : "—",
+    today.sleepMin == null && today.sleepNote ? today.sleepNote :
     sleepAvg != null ? "в ср. " + Math.floor(sleepAvg / 60) + "ч " + pad(Math.round(sleepAvg % 60)) : "цель " + Math.round(s.sleepGoalMin / 6) / 10 + " ч",
     today.sleepMin == null ? C.soft : sleepOk ? C.mint : C.warn);
   row.addSpacer();
