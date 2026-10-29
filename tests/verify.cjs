@@ -27,7 +27,7 @@ check('Mox and food category',()=>{const p=parse('Mox','You spent HKD 25.50 at E
 check('SC and unknown source require review',()=>{for(const s of ['SC','Unknown'])assert.equal(parse(s,'Payment HKD 20').status,'review')});
 check('Alipay excluded',()=>assert.equal(parse('Alipay','Payment 20').status,'ignored'));
 check('OTP redacted from persisted event',()=>{const e=ctx.createEvent({source:'Mox',raw:'Your verification code is 123456',tooLong:false},new Date());assert.equal(e.status,'ignored');assert(!e.raw.includes('123456'))});
-check('Top-ups require review',()=>{assert.equal(parse('Octopus','Top-up HK$100').status,'review');assert.equal(parse('Mox','You spent HKD 100 at Octopus').status,'review')});
+check('Top-ups are not expenses',()=>{assert.equal(parse('Octopus','Top-up HK$100').status,'review');assert.equal(parse('Mox','You spent HKD 100 at Octopus').status,'ignored')});
 check('Refund and decline require review',()=>{for(const t of ['Refunded HKD 10','Payment declined'])assert.equal(parse('Mox',t).status,'review')});
 check('Invalid and truncated input require review',()=>{assert.equal(parse('Mox','text').status,'review');assert.equal(parse('Mox','You spent HKD 20 at Cafe...').status,'review');assert.equal(ctx.parseNotification({source:'Mox',raw:'text',tooLong:true}).status,'review')});
 check('Input dictionary and text formats',()=>{assert.equal(ctx.unpackInput({source:'Mox',message:'You spent HKD 20 at Cafe'}).source,'Mox');assert.equal(ctx.unpackInput('Octopus\nHK$10 for Train').source,'Octopus')});

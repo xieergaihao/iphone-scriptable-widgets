@@ -1,7 +1,7 @@
 // SpendWidget CN — версия для расходов в Китае: юани, только Alipay.
 // Итоги в CNY, уведомления Alipay считаются расходом, WeChat Pay игнорируется.
 // Возвраты («退款提醒») попадают на проверку, расходом не считаются.
-const VERSION = "1.9";
+const VERSION = "1.9.1";
 const FOLDER = "SpendWidget-data-v1";
 const MAX_TEXT = 8192;
 const DUPLICATE_WINDOW_MS = 120000;
@@ -865,10 +865,13 @@ function parseNotification(input) {
     );
 
   // Не считаем пополнение Octopus покупкой.
+  // Пополнение Octopus с Mox — не расход: поездки и покупки по Octopus
+  // учитываются отдельно (автоматизация Wallet), иначе будет двойной счёт.
   if (/octopus|八達通|八达通|\btop[- ]?up\b|\badd[- ]?value\b/i.test(merchant)) {
-    return review(
-      "Возможное пополнение Octopus"
-    );
+    return {
+      status: "ignored",
+      reason: "Пополнение Octopus: траты по карте считаются отдельно"
+    };
   }
 
   return {
