@@ -1,4 +1,4 @@
-// MyDay v7 — Scriptable medium widget
+// MyDay v8 — Scriptable medium widget
 // Work calendar, today's weather, next nonempty day when today's meetings are over.
 // Set the exact calendar title in this field or in the widget Parameter.
 const WORK_CALENDAR_NAME = String(args.widgetParameter || '').trim();
@@ -6,6 +6,8 @@ const DAYS_AHEAD = 7;
 const WEATHER_CACHE_MINUTES = 45;
 const LOCATION_CACHE_MINUTES = 180; // GPS — самое дорогое по батарее, берём редко
 const RAIN_ALERT = 50;
+const AQHI_STATION = 'Eastern'; // станция EPD: Eastern — Тин Хау / Куорри-Бэй
+const AQHI_ALERT = 7;
 const C = {bg:'#101825', mint:'#86E0CE', white:'#F6F8FC', muted:'#A2B1C3', amber:'#E9B87D', line:'#2A3849'};
 const fm = FileManager.local();
 const cachePath = fm.joinPath(fm.documentsDirectory(), 'myday-weather-cache.json');
@@ -68,6 +70,14 @@ async function hkWarnings(pos){
     return s;
   });
 }
+// Индекс качества воздуха EPD (1–10+), только в Гонконге
+async function hkAqhi(pos){
+  if(!pos||pos.lat<22.1||pos.lat>22.6||pos.lon<113.8||pos.lon>114.5)return null;
+  const list=await new Request('https://dashboard.data.gov.hk/api/aqhi-individual?format=json').loadJSON();
+  const row=(list||[]).find(x=>x.station===AQHI_STATION)||(list||[])[0];
+  const v=row?parseInt(String(row.aqhi),10):NaN;
+  return Number.isFinite(v)?v:null;
+}
 async function getWeather(){
   const cache=readCache();
   // Кэш старого формата (без ветра) считаем устаревшим
@@ -75,10 +85,12 @@ async function getWeather(){
   try{
     const pos=await getPosition(cache);
     if(!pos)throw new Error('no position');
-    const url='https://api.open-meteo.com/v1/forecast?latitude='+encodeURIComponent(pos.lat)+'&longitude='+encodeURIComponent(pos.lon)+'&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&wind_speed_unit=kmh&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=1&timezone=auto';
+    const url='https://api.open-meteo.com/v1/forecast?latitude='+encodeURIComponent(pos.lat)+'&longitude='+encodeURIComponent(pos.lon)+'&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&wind_speed_unit=kmh&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunset&forecast_days=1&timezone=auto';
     const r=await new Request(url).loadJSON();
     const d={temp:Math.round(r.current.temperature_2m),code:r.current.weather_code,high:Math.round(r.daily.temperature_2m_max[0]),low:Math.round(r.daily.temperature_2m_min[0]),rain:r.daily.precipitation_probability_max[0],wind:Math.round(r.current.wind_speed_10m),hum:Math.round(r.current.relative_humidity_2m),warnings:[]};
+    const ss=r.daily.sunset&&r.daily.sunset[0];if(ss)d.sunset=String(ss).slice(11,16);
     try{d.warnings=await hkWarnings(pos);}catch(e){}
+    try{d.aqhi=await hkAqhi(pos);}catch(e){}
     fm.writeString(cachePath,JSON.stringify({ts:Date.now(),data:d,pos}));return d;
   }catch(e){return cache.data||null;}
 }
@@ -143,10 +155,20 @@ const summary=widget.addStack();summary.centerAlignContent();
 const weatherStack=summary.addStack();weatherStack.layoutVertically();
 const weather=await getWeather();
 if(weather){
-  txt(weatherStack,weather.temp+'°  '+condition(weather.code),15,C.white,true);
+  const top=weatherStack.addStack();top.bottomAlignContent();
+  txt(top,weather.temp+'°  '+condition(weather.code),15,C.white,true);
+  if(weather.sunset){
+    top.addSpacer(8);
+    const si=top.addImage(SFSymbol.named('sunset.fill').image);si.imageSize=new Size(11,11);si.tintColor=new Color(C.muted);
+    top.addSpacer(2);txt(top,weather.sunset,9,C.muted);
+  }
+  if(weather.aqhi!=null){
+    top.addSpacer(6);
+    txt(top,'AQHI '+weather.aqhi,9,weather.aqhi>=AQHI_ALERT?C.amber:weather.aqhi<=3?C.mint:C.muted,true);
+  }
   // Ветер и влажность; в старом кэше их нет — строка появится после обновления погоды
   const air=[weather.wind!=null?'💨 '+weather.wind+' км/ч':null,weather.hum!=null?'💧 '+weather.hum+'%':null].filter(Boolean).join('  ');
-  const warn=(weather.warnings||[]).join(' · ');
+  const warn=(weather.warnings||[]).concat(weather.aqhi>=AQHI_ALERT?['воздух '+weather.aqhi+' — не бегай на улице']:[]).join(' · ');
   if(warn)txt(weatherStack,'⚠ '+warn,9,C.amber,true);
   else if(weather.rain>=RAIN_ALERT)txt(weatherStack,'☂ возьми зонт · '+weather.rain+'%'+(air?'  '+air:''),9,C.amber);
   else txt(weatherStack,'↑'+weather.high+'° ↓'+weather.low+'°  ☂ '+weather.rain+'%'+(air?'  '+air:''),9,weather.wind>=40?C.amber:C.muted);
