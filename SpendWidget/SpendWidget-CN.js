@@ -1,7 +1,7 @@
 // SpendWidget CN — версия для расходов в Китае: юани, только Alipay.
 // Итоги в CNY, уведомления Alipay считаются расходом, WeChat Pay игнорируется.
 // Возвраты («退款提醒») попадают на проверку, расходом не считаются.
-const VERSION = "1.9.3";
+const VERSION = "1.10";
 const FOLDER = "SpendWidget-data-v1";
 const MAX_TEXT = 8192;
 const DUPLICATE_WINDOW_MS = 120000;
@@ -181,6 +181,13 @@ function shortHKD(n) {
     n.toLocaleString(
       "en-HK", { maximumFractionDigits: 0 }
     );
+}
+
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
 }
 
 function review(reason) {
@@ -1215,56 +1222,37 @@ function renderWidget(data, fx, mode = "CATEGORIES") {
     data.errors.length > 0 ||
     !fx;
 
-  // HEADER
+  // HEADER: название слева, месяц и валюта справа
   const header = w.addStack();
   header.centerAlignContent();
-
-  addText(
-    header,
-    categories
-      ? "Расходы · категории"
-      : "Расходы · обзор",
-    10,
-    COLORS.mint,
-    true
-  );
-
+  addText(header, "Расходы", 11, COLORS.text, true);
   header.addSpacer();
+  const monthName = new Date(day + "T12:00:00")
+    .toLocaleDateString("ru-RU", { month: "long" });
+  addText(header, monthName + " · " + BASE(), 10, COLORS.soft);
 
-  addText(
-    header,
-    BASE() + "  ·  " +
-      day.slice(5, 7) + "/" +
-      day.slice(0, 4),
-    9,
-    COLORS.soft
-  );
+  w.addSpacer(5);
 
-  w.addSpacer(6);
-
-  // MONTH
+  // ИТОГ МЕСЯЦА: крупно слева, прогноз справа
   const month = w.addStack();
-  const left = month.addStack();
-  left.layoutVertically();
+  month.centerAlignContent();
+  addText(month, shortHKD(stats.sums.month) + (incomplete ? "*" : ""), 22, COLORS.text, true);
+  month.addSpacer(8);
+  const sub = month.addStack();
+  sub.layoutVertically();
+  addText(sub, "за месяц", 10, COLORS.soft);
+  addText(sub, stats.counts.month + " " + plural(stats.counts.month, "операция", "операции", "операций"), 10, COLORS.soft);
+  month.addSpacer();
+  const dom = Number(day.slice(8, 10));
+  if (dom >= 3 && stats.sums.month > 0) {
+    const dim = new Date(Number(day.slice(0, 4)), Number(day.slice(5, 7)), 0).getDate();
+    const fc = month.addStack();
+    fc.layoutVertically();
+    addText(fc, "прогноз", 10, COLORS.soft, true);
+    addText(fc, "≈ " + shortHKD(Math.round(stats.sums.month / dom * dim)), 12, COLORS.text, true);
+  }
 
-  addText(
-    left,
-    "ЗА МЕСЯЦ",
-    9,
-    COLORS.soft,
-    true
-  );
-
-  addText(
-    left,
-    shortHKD(stats.sums.month) +
-      (incomplete ? "*" : ""),
-    23,
-    COLORS.text,
-    true
-  );
-
-  w.addSpacer(8);
+  w.addSpacer(categories ? 8 : 5);
 
   if (categories) {
     // CATEGORIES VIEW
@@ -1316,41 +1304,33 @@ function renderWidget(data, fx, mode = "CATEGORIES") {
         true
       );
 
-      if (i < 3) w.addSpacer(5);
+      if (i < 3) w.addSpacer(7);
     }
   } else {
-    // OVERVIEW
-    const summary = w.addStack();
-    summary.layoutHorizontally();
-
-    const items = [
-      ["СЕГОДНЯ", stats.sums.today],
-      ["7 ДНЕЙ", stats.sums.week]
+    // OVERVIEW: плашки на всю ширину
+    const reviewCount = data.events.filter(e =>
+      e.status === "review" && e.day.slice(0, 7) === day.slice(0, 7)
+    ).length;
+    const chips = [
+      ["сегодня", shortHKD(stats.sums.today), COLORS.text],
+      ["7 дней", shortHKD(stats.sums.week), COLORS.text]
     ];
-
-    items.forEach(([heading, amount], index) => {
-      if (index) summary.addSpacer(8);
-
-      const cell = summary.addStack();
-      cell.layoutVertically();
-      cell.backgroundColor = COLORS.card;
-      cell.cornerRadius = 7;
-      cell.setPadding(5, 9, 5, 9);
-
-      addText(
-        cell, heading, 8, COLORS.soft, true
-      );
-
-      addText(
-        cell,
-        shortHKD(amount),
-        12,
-        COLORS.text,
-        true
-      );
+    if (reviewCount) chips.push(["на проверку", String(reviewCount), COLORS.warning]);
+    const chipRow = w.addStack();
+    chipRow.centerAlignContent();
+    chips.forEach(([label, value, color], i) => {
+      if (i) chipRow.addSpacer();
+      const ch = chipRow.addStack();
+      ch.centerAlignContent();
+      ch.backgroundColor = COLORS.card;
+      ch.cornerRadius = 6;
+      ch.setPadding(2, 7, 2, 7);
+      addText(ch, label, 10, COLORS.soft);
+      ch.addSpacer(4);
+      addText(ch, value, 11, color, true);
     });
 
-    w.addSpacer(7);
+    w.addSpacer(5);
 
     // LAST 7 DAYS CHART
     const dt = new Date(day + "T12:00:00");
@@ -1385,9 +1365,9 @@ function renderWidget(data, fx, mode = "CATEGORIES") {
     }
 
     const W = 610;
-    const H = 88;
-    const chartMax = 40;
-    const plotBottom = 65;
+    const H = 112;
+    const chartMax = 62;
+    const plotBottom = 89;
 
     const ctx = new DrawContext();
     ctx.size = new Size(W, H);
@@ -1447,23 +1427,14 @@ function renderWidget(data, fx, mode = "CATEGORIES") {
       ctx.drawTextInRect(
         points[i].date.slice(8),
         new Rect(
-          i * cellW, 68, cellW, 18
+          i * cellW, 92, cellW, 18
         )
       );
     }
 
     const image = w.addImage(ctx.getImage());
-    image.imageSize = new Size(305, 44);
+    image.imageSize = new Size(305, 56);
 
-    w.addSpacer(4);
-
-    addText(
-      w,
-      stats.counts.month +
-        " операций за месяц",
-      9,
-      COLORS.soft
-    );
   }
 
   if (incomplete) {
