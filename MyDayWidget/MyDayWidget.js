@@ -1,4 +1,4 @@
-// MyDay v11 — Scriptable medium widget
+// MyDay v12 — Scriptable medium widget
 // Work calendar, today's weather, next nonempty day when today's meetings are over.
 // Set the exact calendar title in this field or in the widget Parameter.
 const WORK_CALENDAR_NAME = String(args.widgetParameter || '').trim();
@@ -10,7 +10,7 @@ const AQHI_STATION = 'Eastern'; // станция EPD: Eastern — Тин Хау
 const AQHI_ALERT = 7;
 const WIND_ALERT = 11; // м/с — сильный ветер
 const TOMORROW_FROM_HOUR = 18; // с этого часа вторая строка — прогноз на завтра
-const C = {bg:'#101825', mint:'#86E0CE', white:'#F6F8FC', muted:'#A2B1C3', amber:'#E9B87D', line:'#2A3849'};
+const C = {bg:'#17191E', mint:'#5B9BEF', white:'#ECEEF1', muted:'#8E96A3', amber:'#F2A33A', line:'#2E323A'};
 const fm = FileManager.local();
 const cachePath = fm.joinPath(fm.documentsDirectory(), 'myday-weather-cache.json');
 const now = new Date();
@@ -151,7 +151,7 @@ widget.backgroundColor=new Color(C.bg);widget.setPadding(12,14,10,14);
 widget.url=calshow(now);
 const head=widget.addStack();head.centerAlignContent();
 const ico=head.addImage(SFSymbol.named('calendar').image);ico.imageSize=new Size(12,12);ico.tintColor=new Color(C.mint);
-head.addSpacer(6);txt(head,'МОЙ ДЕНЬ',10,C.mint,true);head.addSpacer();
+head.addSpacer(6);txt(head,'Мой день',11,C.white,true);head.addSpacer();
 txt(head,now.toLocaleDateString('ru-RU',{day:'numeric',month:'short'}).toUpperCase(),9,C.muted,true);
 widget.addSpacer(7);
 const summary=widget.addStack();summary.centerAlignContent();

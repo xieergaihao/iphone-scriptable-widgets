@@ -1,4 +1,4 @@
-const VERSION = "1.9.2";
+const VERSION = "1.9.3";
 const FOLDER = "SpendWidget-data-v1";
 const MAX_TEXT = 8192;
 const DUPLICATE_WINDOW_MS = 120000;
@@ -16,12 +16,12 @@ const CATEGORIES = [
 ];
 
 const COLORS = {
-  bg: new Color("111824"),
-  card: new Color("202D3E"),
-  text: new Color("FFFFFF"),
-  soft: new Color("9AACBF"),
-  mint: new Color("86E0CE"),
-  warning: new Color("F4C479")
+  bg: new Color("17191E"),
+  card: new Color("22252B"),
+  text: new Color("ECEEF1"),
+  soft: new Color("8E96A3"),
+  mint: new Color("5B9BEF"),
+  warning: new Color("F2A33A")
 };
 
 const FX_URL =
@@ -1219,8 +1219,8 @@ function renderWidget(data, fx, mode = "CATEGORIES") {
   addText(
     header,
     categories
-      ? "SPEND  /  КАТЕГОРИИ"
-      : "SPEND  /  ОБЗОР",
+      ? "Расходы · категории"
+      : "Расходы · обзор",
     10,
     COLORS.mint,
     true
@@ -1413,7 +1413,7 @@ function renderWidget(data, fx, mode = "CATEGORIES") {
       ctx.setFillColor(
         i === 6
           ? COLORS.mint
-          : new Color("536B85")
+          : new Color("3A4250")
       );
 
       ctx.fillRect(

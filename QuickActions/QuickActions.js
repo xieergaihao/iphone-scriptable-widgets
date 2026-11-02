@@ -3,11 +3,11 @@
 // Без заголовка. Все существующие команды сохранены.
 
 const COLORS = {
-  background: "101C2B",
-  tile: "203244",
-  border: "30485B",
-  accent: "83D6CB",
-  text: "F4F8FA"
+  background: "17191E",
+  tile: "22252B",
+  border: "2E323A",
+  accent: "5B9BEF",
+  text: "ECEEF1"
 };
 
 // 4-е поле — прямая ссылка. Если заполнена, кнопка открывает

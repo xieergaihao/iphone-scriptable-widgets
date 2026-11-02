@@ -1,4 +1,4 @@
-// BodyWidget v2.1 — Scriptable medium widget
+// BodyWidget v2.2 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -7,8 +7,8 @@
 const FOLDER = "BodyWidget-data-v1";
 const KEEP_DAYS = 60;
 const C = {
-  bg: "111824", card: "202D3E", text: "FFFFFF", soft: "9AACBF",
-  mint: "86E0CE", warn: "F4C479", bar: "536B85"
+  bg: "17191E", card: "22252B", text: "ECEEF1", soft: "8E96A3",
+  mint: "5B9BEF", warn: "F2A33A", bar: "3A4250"
 };
 const DEFAULTS = { stepsGoal: 8000, sleepGoalMin: 450 };
 
@@ -231,7 +231,7 @@ function render() {
 
   const head = w.addStack();
   head.centerAlignContent();
-  txt(head, "ТЕЛО  /  СЕГОДНЯ", 10, C.mint, true);
+  txt(head, "Тело · сегодня", 11, C.text, true);
   head.addSpacer();
   const upd = today.updatedAt ? new Date(today.updatedAt) : null;
   // Две последние ночи без сна при свежих шагах — Google Health перестал писать сон в Health
