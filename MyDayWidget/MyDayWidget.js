@@ -1,4 +1,4 @@
-// MyDay v17 — Scriptable medium widget
+// MyDay v18 — Scriptable medium widget
 // Work calendar, today's weather, next nonempty day when today's meetings are over.
 // Set the exact calendar title in this field or in the widget Parameter.
 const WORK_CALENDAR_NAME = String(args.widgetParameter || '').trim();
@@ -11,7 +11,7 @@ const AQHI_ALERT = 7;
 const UV_ALERT = 8; // УФ показываем только от этого уровня (очень высокий)
 const WIND_ALERT = 11; // м/с — сильный ветер
 const TOMORROW_FROM_HOUR = 18; // с этого часа вторая строка — прогноз на завтра
-const C = {bg:'#17191E', mint:'#5B9BEF', white:'#ECEEF1', muted:'#8E96A3', amber:'#F2A33A', line:'#2E323A'};
+const C = {bg:'#17191E', mint:'#5B9BEF', white:'#ECEEF1', muted:'#8E96A3', amber:'#F2A33A', line:'#2E323A', chip:'#22252B'};
 const fm = FileManager.local();
 const cachePath = fm.joinPath(fm.documentsDirectory(), 'myday-weather-cache.json');
 const now = new Date();
@@ -151,61 +151,57 @@ function nextRefresh(agenda){
 const widget=new ListWidget();
 widget.backgroundColor=new Color(C.bg);widget.setPadding(10,14,8,14);
 widget.url=calshow(now);
+let agenda=null, agendaError=null;
+try{agenda=await getAgenda();}catch(e){agendaError=e.message||'Нет доступа к календарю';}
+// Счётчик встреч — в шапке, а не отдельной колонкой
+let counterLine='';
+if(!agendaError){
+  if(agenda.isToday&&agenda.events.length&&agenda.events.length<agenda.count)counterLine='осталось '+agenda.events.length+' из '+agenda.count;
+  else if(!agenda.isToday&&dayStart(agenda.date)-dayStart(now)===86400000)counterLine='завтра '+agenda.count+' встр.';
+  else counterLine=agenda.count+' встр.';
+}
 const head=widget.addStack();head.centerAlignContent();
 const ico=head.addImage(SFSymbol.named('calendar').image);ico.imageSize=new Size(12,12);ico.tintColor=new Color(C.mint);
 head.addSpacer(6);txt(head,'Мой день',11,C.white,true);head.addSpacer();
-txt(head,now.toLocaleDateString('ru-RU',{day:'numeric',month:'short'}).toUpperCase(),9,C.muted,true);
-widget.addSpacer(7);
-const summary=widget.addStack();summary.centerAlignContent();
-const weatherStack=summary.addStack();weatherStack.layoutVertically();
+txt(head,now.toLocaleDateString('ru-RU',{day:'numeric',month:'short'}),10,C.muted);
+if(counterLine){head.addSpacer(8);txt(head,counterLine,10,C.mint,true);}
+widget.addSpacer(6);
 const weather=await getWeather();
 if(weather){
-  const GAP=14; // расстояние между показателями
-  const FS=10;  // размер подписей погоды
-  // Показатель: иконка SF Symbol + текст, с отступом от предыдущего
-  const metric=(stack,symbol,text,color,first)=>{
-    if(!first)stack.addSpacer(GAP);
-    const im=stack.addImage(SFSymbol.named(symbol).image);im.imageSize=new Size(11,11);im.tintColor=new Color(color);
-    stack.addSpacer(4);txt(stack,text,FS,color);
-  };
-  const top=weatherStack.addStack();top.centerAlignContent();
-  txt(top,weather.temp+'°  '+condition(weather.code),15,C.white,true);
-  if(weather.sunset){top.addSpacer(GAP);const si=top.addImage(SFSymbol.named('sunset.fill').image);si.imageSize=new Size(12,12);si.tintColor=new Color(C.muted);top.addSpacer(4);txt(top,weather.sunset,FS,C.muted);}
-  if(weather.aqhi!=null){top.addSpacer(GAP);txt(top,'AQHI '+weather.aqhi,FS,weather.aqhi>=AQHI_ALERT?C.amber:weather.aqhi<=3?C.mint:C.muted,true);}
-  if(weather.uv!=null&&weather.uv>=UV_ALERT&&now.getHours()<17){top.addSpacer(GAP);txt(top,'УФ '+weather.uv,FS,C.amber,true);}
-  weatherStack.addSpacer(4);
-  const warn=(weather.warnings||[]).concat(weather.aqhi>=AQHI_ALERT?['воздух '+weather.aqhi+' — не бегай на улице']:[]).join(' · ');
-  // Сегодня
-  const line=weatherStack.addStack();line.centerAlignContent();
-  if(warn)txt(line,'⚠ '+warn,FS,C.amber,true);
-  else{
-    metric(line,'thermometer.medium',weather.high+'°/'+weather.low+'°',C.muted,true);
-    metric(line,'umbrella.fill',weather.rain+'%',weather.rain>=RAIN_ALERT?C.amber:C.muted);
-    if(weather.hum!=null)metric(line,'humidity.fill',weather.hum+'%',C.muted);
-  }
-  // Завтра — всегда отдельной строкой
+  // Строка 1: крупная температура, состояние и диапазон; справа — завтра
+  const a=widget.addStack();a.centerAlignContent();
+  txt(a,weather.temp+'°',26,C.white,true);a.addSpacer(8);
+  const cond=a.addStack();cond.layoutVertically();
+  txt(cond,condition(weather.code),12,C.white,true);
+  txt(cond,'↑'+weather.high+'°  ↓'+weather.low+'°',10,C.muted);
+  a.addSpacer();
   if(weather.tmr){
-    const t=weather.tmr;
-    weatherStack.addSpacer(3);
-    const tl=weatherStack.addStack();tl.centerAlignContent();
-    txt(tl,'Завтра',FS,C.white,true);tl.addSpacer(8);
-    metric(tl,'thermometer.medium',t.high+'°/'+t.low+'°',C.muted,true);
-    metric(tl,'umbrella.fill',t.rain+'%',t.rain>=RAIN_ALERT?C.amber:C.muted);
+    const t=weather.tmr,tb=a.addStack();tb.layoutVertically();
+    txt(tb,'Завтра',10,C.muted,true);
+    const tr=tb.addStack();tr.centerAlignContent();
+    txt(tr,t.high+'°/'+t.low+'°',12,C.white,true);tr.addSpacer(6);
+    const ui=tr.addImage(SFSymbol.named('umbrella.fill').image);ui.imageSize=new Size(10,10);ui.tintColor=new Color(t.rain>=RAIN_ALERT?C.amber:C.muted);
+    tr.addSpacer(3);txt(tr,t.rain+'%',11,t.rain>=RAIN_ALERT?C.amber:C.white,true);
   }
+  widget.addSpacer(6);
+  const warn=(weather.warnings||[]).concat(weather.aqhi>=AQHI_ALERT?['воздух '+weather.aqhi+' — не бегай на улице']:[]).join(' · ');
+  if(warn){txt(widget,'⚠ '+warn,10,C.amber,true);widget.addSpacer(4);}
+  // Строка 2: показатели-плашки, равномерно на всю ширину
+  const chips=[['umbrella.fill',weather.rain+'%',weather.rain>=RAIN_ALERT?C.amber:C.white]];
+  if(weather.hum!=null)chips.push(['humidity.fill',weather.hum+'%',C.white]);
+  if(weather.aqhi!=null)chips.push(['aqi.medium','AQHI '+weather.aqhi,weather.aqhi>=AQHI_ALERT?C.amber:weather.aqhi<=3?C.mint:C.white]);
+  if(weather.uv!=null&&weather.uv>=UV_ALERT&&now.getHours()<17)chips.push(['sun.max.fill','УФ '+weather.uv,C.amber]);
+  if(weather.sunset)chips.push(['sunset.fill',weather.sunset,C.white]);
+  const row=widget.addStack();row.centerAlignContent();
+  chips.forEach((c,i)=>{
+    if(i)row.addSpacer();
+    const ch=row.addStack();ch.centerAlignContent();ch.backgroundColor=new Color(C.chip);ch.cornerRadius=6;ch.setPadding(3,7,3,7);
+    const im=ch.addImage(SFSymbol.named(c[0]).image);im.imageSize=new Size(11,11);im.tintColor=new Color(c[2]===C.white?C.muted:c[2]);
+    ch.addSpacer(4);txt(ch,c[1],11,c[2],true);
+  });
 }
-else{txt(weatherStack,'Погода недоступна',11,C.amber);txt(weatherStack,'Проверь геолокацию',9,C.muted);}
-summary.addSpacer();
-const counter=summary.addStack();counter.layoutVertically();
-let agenda=null, agendaError=null;
-try{agenda=await getAgenda();}catch(e){agendaError=e.message||'Нет доступа к календарю';}
-let counterText='—', counterLabel='ВСТРЕЧИ';
-if(!agendaError){
-  if(agenda.isToday&&agenda.events.length&&agenda.events.length<agenda.count){counterText=agenda.events.length+'/'+agenda.count;counterLabel='ОСТАЛОСЬ';}
-  else counterText=String(agenda.count);
-  if(!agenda.isToday)counterLabel=dayStart(agenda.date)-dayStart(now)===86400000?'ЗАВТРА':'ВСТРЕЧИ';
-}
-txt(counter,counterLabel,8,C.muted,true);txt(counter,counterText,18,C.mint,true);
-widget.addSpacer(5);
+else{txt(widget,'Погода недоступна',11,C.amber);txt(widget,'Проверь геолокацию',9,C.muted);}
+widget.addSpacer(6);
 const divider=widget.addStack();divider.backgroundColor=new Color(C.line);divider.size=new Size(0,1);
 widget.addSpacer(5);
 if(agendaError){txt(widget,agendaError,10,C.amber);txt(widget,'Проверь доступ Scriptable к календарю',9,C.muted);}
@@ -225,13 +221,13 @@ else{
     line.url=link||calshow(e.startDate);
     const bar=line.addStack();bar.size=new Size(3,19);bar.backgroundColor=e.calendar&&e.calendar.color?e.calendar.color:new Color(C.mint);
     line.addSpacer(7);
-    const times=line.addStack();times.layoutVertically();times.size=new Size(52,0);
+    const times=line.addStack();times.layoutVertically();times.size=new Size(44,0);
     const active=agenda.isToday&&e.startDate<=now&&e.endDate>now;
     const soon=agenda.isToday&&!active&&firstUpcoming?untilText(e.startDate):null;
     if(agenda.isToday&&!active)firstUpcoming=false;
     txt(times,active?'СЕЙЧАС':hhmm(e.startDate),10,active?C.mint:C.white,true);
     txt(times,soon||hhmm(e.endDate),8,soon?C.amber:C.muted);
-    line.addSpacer(6);
+    line.addSpacer(8);
     txt(line,e.title||'Без названия',11,C.white,true);
     line.addSpacer();
     if(link){const v=line.addImage(SFSymbol.named('video.fill').image);v.imageSize=new Size(13,13);v.tintColor=new Color(C.mint);}
