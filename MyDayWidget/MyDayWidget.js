@@ -1,4 +1,4 @@
-// MyDay v13 — Scriptable medium widget
+// MyDay v14 — Scriptable medium widget
 // Work calendar, today's weather, next nonempty day when today's meetings are over.
 // Set the exact calendar title in this field or in the widget Parameter.
 const WORK_CALENDAR_NAME = String(args.widgetParameter || '').trim();
@@ -8,6 +8,7 @@ const LOCATION_CACHE_MINUTES = 180; // GPS — самое дорогое по б
 const RAIN_ALERT = 50;
 const AQHI_STATION = 'Eastern'; // станция EPD: Eastern — Тин Хау / Куорри-Бэй
 const AQHI_ALERT = 7;
+const UV_ALERT = 8; // УФ показываем только от этого уровня (очень высокий)
 const WIND_ALERT = 11; // м/с — сильный ветер
 const TOMORROW_FROM_HOUR = 18; // с этого часа вторая строка — прогноз на завтра
 const C = {bg:'#17191E', mint:'#5B9BEF', white:'#ECEEF1', muted:'#8E96A3', amber:'#F2A33A', line:'#2E323A'};
@@ -83,14 +84,15 @@ async function hkAqhi(pos){
 async function getWeather(){
   const cache=readCache();
   // Кэш старого формата (без ветра) считаем устаревшим
-  if(cache.ts && Date.now()-cache.ts<WEATHER_CACHE_MINUTES*60000 && cache.data && cache.data.unit==='ms' && cache.data.tmr)return cache.data;
+  if(cache.ts && Date.now()-cache.ts<WEATHER_CACHE_MINUTES*60000 && cache.data && cache.data.unit==='ms' && cache.data.tmr && 'uv' in cache.data)return cache.data;
   try{
     const pos=await getPosition(cache);
     if(!pos)throw new Error('no position');
-    const url='https://api.open-meteo.com/v1/forecast?latitude='+encodeURIComponent(pos.lat)+'&longitude='+encodeURIComponent(pos.lon)+'&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&wind_speed_unit=ms&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,sunset&forecast_days=2&timezone=auto';
+    const url='https://api.open-meteo.com/v1/forecast?latitude='+encodeURIComponent(pos.lat)+'&longitude='+encodeURIComponent(pos.lon)+'&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&wind_speed_unit=ms&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,sunset,uv_index_max&forecast_days=2&timezone=auto';
     const r=await new Request(url).loadJSON();
     const d={temp:Math.round(r.current.temperature_2m),code:r.current.weather_code,high:Math.round(r.daily.temperature_2m_max[0]),low:Math.round(r.daily.temperature_2m_min[0]),rain:r.daily.precipitation_probability_max[0],wind:Math.round(r.current.wind_speed_10m),hum:Math.round(r.current.relative_humidity_2m),warnings:[],unit:'ms'};
     const D=r.daily;if(D.time&&D.time.length>1)d.tmr={high:Math.round(D.temperature_2m_max[1]),low:Math.round(D.temperature_2m_min[1]),rain:D.precipitation_probability_max[1],wind:Math.round(D.wind_speed_10m_max[1])};
+    d.uv=r.daily.uv_index_max?Math.round(r.daily.uv_index_max[0]):null;
     const ss=r.daily.sunset&&r.daily.sunset[0];if(ss)d.sunset=String(ss).slice(11,16);
     try{d.warnings=await hkWarnings(pos);}catch(e){}
     try{d.aqhi=await hkAqhi(pos);}catch(e){}
@@ -169,6 +171,7 @@ if(weather){
   txt(top,weather.temp+'°  '+condition(weather.code),15,C.white,true);
   if(weather.sunset){top.addSpacer(12);const si=top.addImage(SFSymbol.named('sunset.fill').image);si.imageSize=new Size(11,11);si.tintColor=new Color(C.muted);top.addSpacer(3);txt(top,weather.sunset,9,C.muted);}
   if(weather.aqhi!=null){top.addSpacer(10);txt(top,'AQHI '+weather.aqhi,9,weather.aqhi>=AQHI_ALERT?C.amber:weather.aqhi<=3?C.mint:C.muted,true);}
+  if(weather.uv!=null&&weather.uv>=UV_ALERT&&now.getHours()<17){top.addSpacer(10);txt(top,'УФ '+weather.uv,9,C.amber,true);}
   weatherStack.addSpacer(3);
   const warn=(weather.warnings||[]).concat(weather.aqhi>=AQHI_ALERT?['воздух '+weather.aqhi+' — не бегай на улице']:[]).join(' · ');
   const line=weatherStack.addStack();line.centerAlignContent();
