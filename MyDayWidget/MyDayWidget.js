@@ -1,4 +1,4 @@
-// MyDay v14 — Scriptable medium widget
+// MyDay v15 — Scriptable medium widget
 // Work calendar, today's weather, next nonempty day when today's meetings are over.
 // Set the exact calendar title in this field or in the widget Parameter.
 const WORK_CALENDAR_NAME = String(args.widgetParameter || '').trim();
@@ -160,34 +160,39 @@ const summary=widget.addStack();summary.centerAlignContent();
 const weatherStack=summary.addStack();weatherStack.layoutVertically();
 const weather=await getWeather();
 if(weather){
-  const GAP=12; // расстояние между показателями
+  const GAP=14; // расстояние между показателями
+  const FS=10;  // размер подписей погоды
   // Показатель: иконка SF Symbol + текст, с отступом от предыдущего
   const metric=(stack,symbol,text,color,first)=>{
     if(!first)stack.addSpacer(GAP);
-    const im=stack.addImage(SFSymbol.named(symbol).image);im.imageSize=new Size(9,9);im.tintColor=new Color(color);
-    stack.addSpacer(3);txt(stack,text,9,color);
+    const im=stack.addImage(SFSymbol.named(symbol).image);im.imageSize=new Size(11,11);im.tintColor=new Color(color);
+    stack.addSpacer(4);txt(stack,text,FS,color);
   };
-  const top=weatherStack.addStack();top.bottomAlignContent();
+  const top=weatherStack.addStack();top.centerAlignContent();
   txt(top,weather.temp+'°  '+condition(weather.code),15,C.white,true);
-  if(weather.sunset){top.addSpacer(12);const si=top.addImage(SFSymbol.named('sunset.fill').image);si.imageSize=new Size(11,11);si.tintColor=new Color(C.muted);top.addSpacer(3);txt(top,weather.sunset,9,C.muted);}
-  if(weather.aqhi!=null){top.addSpacer(10);txt(top,'AQHI '+weather.aqhi,9,weather.aqhi>=AQHI_ALERT?C.amber:weather.aqhi<=3?C.mint:C.muted,true);}
-  if(weather.uv!=null&&weather.uv>=UV_ALERT&&now.getHours()<17){top.addSpacer(10);txt(top,'УФ '+weather.uv,9,C.amber,true);}
-  weatherStack.addSpacer(3);
+  if(weather.sunset){top.addSpacer(GAP);const si=top.addImage(SFSymbol.named('sunset.fill').image);si.imageSize=new Size(12,12);si.tintColor=new Color(C.muted);top.addSpacer(4);txt(top,weather.sunset,FS,C.muted);}
+  if(weather.aqhi!=null){top.addSpacer(GAP);txt(top,'AQHI '+weather.aqhi,FS,weather.aqhi>=AQHI_ALERT?C.amber:weather.aqhi<=3?C.mint:C.muted,true);}
+  if(weather.uv!=null&&weather.uv>=UV_ALERT&&now.getHours()<17){top.addSpacer(GAP);txt(top,'УФ '+weather.uv,FS,C.amber,true);}
+  weatherStack.addSpacer(4);
   const warn=(weather.warnings||[]).concat(weather.aqhi>=AQHI_ALERT?['воздух '+weather.aqhi+' — не бегай на улице']:[]).join(' · ');
+  // Сегодня
   const line=weatherStack.addStack();line.centerAlignContent();
-  const evening=weather.tmr&&now.getHours()>=TOMORROW_FROM_HOUR;
-  if(warn)txt(line,'⚠ '+warn,9,C.amber,true);
-  else if(evening){
-    const t=weather.tmr,c=t.rain>=RAIN_ALERT||t.wind>=WIND_ALERT?C.amber:C.muted;
-    txt(line,'завтра',9,c,true);line.addSpacer(6);
-    metric(line,'thermometer.medium',t.high+'°/'+t.low+'°',c,true);
-    metric(line,'umbrella.fill',t.rain+'%',t.rain>=RAIN_ALERT?C.amber:C.muted);
-    metric(line,'wind',t.wind+' м/с',t.wind>=WIND_ALERT?C.amber:C.muted);
-  }else{
+  if(warn)txt(line,'⚠ '+warn,FS,C.amber,true);
+  else{
     metric(line,'thermometer.medium',weather.high+'°/'+weather.low+'°',C.muted,true);
     metric(line,'umbrella.fill',weather.rain+'%',weather.rain>=RAIN_ALERT?C.amber:C.muted);
     if(weather.wind!=null)metric(line,'wind',weather.wind+' м/с',weather.wind>=WIND_ALERT?C.amber:C.muted);
     if(weather.hum!=null)metric(line,'humidity.fill',weather.hum+'%',C.muted);
+  }
+  // Завтра — всегда отдельной строкой
+  if(weather.tmr){
+    const t=weather.tmr;
+    weatherStack.addSpacer(3);
+    const tl=weatherStack.addStack();tl.centerAlignContent();
+    txt(tl,'Завтра',FS,C.white,true);tl.addSpacer(8);
+    metric(tl,'thermometer.medium',t.high+'°/'+t.low+'°',C.muted,true);
+    metric(tl,'umbrella.fill',t.rain+'%',t.rain>=RAIN_ALERT?C.amber:C.muted);
+    metric(tl,'wind',t.wind+' м/с',t.wind>=WIND_ALERT?C.amber:C.muted);
   }
 }
 else{txt(weatherStack,'Погода недоступна',11,C.amber);txt(weatherStack,'Проверь геолокацию',9,C.muted);}
@@ -202,9 +207,9 @@ if(!agendaError){
   if(!agenda.isToday)counterLabel=dayStart(agenda.date)-dayStart(now)===86400000?'ЗАВТРА':'ВСТРЕЧИ';
 }
 txt(counter,counterLabel,8,C.muted,true);txt(counter,counterText,18,C.mint,true);
-widget.addSpacer(7);
+widget.addSpacer(5);
 const divider=widget.addStack();divider.backgroundColor=new Color(C.line);divider.size=new Size(0,1);
-widget.addSpacer(6);
+widget.addSpacer(5);
 if(agendaError){txt(widget,agendaError,10,C.amber);txt(widget,'Проверь доступ Scriptable к календарю',9,C.muted);}
 else if(!agenda.events.length){txt(widget,agenda.finished?'Сегодня все встречи завершены':'В ближайшие 7 дней встреч нет',11,C.white);txt(widget,'Нажми, чтобы открыть календарь',9,C.muted);}
 else{
@@ -219,7 +224,7 @@ else{
     const link=meetingLink(e);
     const line=widget.addStack();line.centerAlignContent();
     line.url=link||calshow(e.startDate);
-    const bar=line.addStack();bar.size=new Size(3,21);bar.backgroundColor=e.calendar&&e.calendar.color?e.calendar.color:new Color(C.mint);
+    const bar=line.addStack();bar.size=new Size(3,19);bar.backgroundColor=e.calendar&&e.calendar.color?e.calendar.color:new Color(C.mint);
     line.addSpacer(7);
     const times=line.addStack();times.layoutVertically();times.size=new Size(77,0);
     const active=agenda.isToday&&e.startDate<=now&&e.endDate>now;
@@ -231,7 +236,7 @@ else{
     txt(line,e.title||'Без названия',11,C.white,true);
     line.addSpacer();
     if(link){const v=line.addImage(SFSymbol.named('video.fill').image);v.imageSize=new Size(13,13);v.tintColor=new Color(C.mint);}
-    widget.addSpacer(4);
+    widget.addSpacer(2);
   }
   if(agenda.events.length>3)txt(widget,'Ещё '+(agenda.events.length-3)+' встреч · открыть календарь',9,C.muted);
   // Когда сегодня мало встреч, внизу — первая встреча завтра
