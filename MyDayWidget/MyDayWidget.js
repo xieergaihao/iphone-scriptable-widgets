@@ -1,4 +1,4 @@
-// MyDay v15 — Scriptable medium widget
+// MyDay v16 — Scriptable medium widget
 // Work calendar, today's weather, next nonempty day when today's meetings are over.
 // Set the exact calendar title in this field or in the widget Parameter.
 const WORK_CALENDAR_NAME = String(args.widgetParameter || '').trim();
@@ -27,7 +27,7 @@ function dayStart(d){const v=new Date(d);v.setHours(0,0,0,0);return v;}
 function addDays(d,n){const v=new Date(d);v.setDate(v.getDate()+n);return v;}
 function dayLabel(d){
   const diff=Math.round((dayStart(d)-dayStart(now))/86400000);
-  if(diff===1)return 'ЗАВТРА · РАСПИСАНИЕ';
+  if(diff===1)return 'ЗАВТРА';
   return d.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'}).toUpperCase();
 }
 function calshow(date){return 'calshow:'+(Math.floor(new Date(date).getTime()/1000)-978307200);}
@@ -149,7 +149,7 @@ function nextRefresh(agenda){
 }
 
 const widget=new ListWidget();
-widget.backgroundColor=new Color(C.bg);widget.setPadding(12,14,10,14);
+widget.backgroundColor=new Color(C.bg);widget.setPadding(10,14,8,14);
 widget.url=calshow(now);
 const head=widget.addStack();head.centerAlignContent();
 const ico=head.addImage(SFSymbol.named('calendar').image);ico.imageSize=new Size(12,12);ico.tintColor=new Color(C.mint);
@@ -182,7 +182,6 @@ if(weather){
     metric(line,'thermometer.medium',weather.high+'°/'+weather.low+'°',C.muted,true);
     metric(line,'umbrella.fill',weather.rain+'%',weather.rain>=RAIN_ALERT?C.amber:C.muted);
     if(weather.wind!=null)metric(line,'wind',weather.wind+' м/с',weather.wind>=WIND_ALERT?C.amber:C.muted);
-    if(weather.hum!=null)metric(line,'humidity.fill',weather.hum+'%',C.muted);
   }
   // Завтра — всегда отдельной строкой
   if(weather.tmr){
@@ -214,7 +213,8 @@ if(agendaError){txt(widget,agendaError,10,C.amber);txt(widget,'Проверь д
 else if(!agenda.events.length){txt(widget,agenda.finished?'Сегодня все встречи завершены':'В ближайшие 7 дней встреч нет',11,C.white);txt(widget,'Нажми, чтобы открыть календарь',9,C.muted);}
 else{
   const hdr=widget.addStack();hdr.centerAlignContent();
-  txt(hdr,agenda.isToday?'СЕГОДНЯ · РАСПИСАНИЕ':dayLabel(agenda.date),9,C.mint,true);
+  const more=agenda.events.length>3?' · ещё '+(agenda.events.length-3):'';
+  txt(hdr,(agenda.isToday?'СЕГОДНЯ':dayLabel(agenda.date))+more,9,C.mint,true);
   hdr.addSpacer();
   const fw=freeWindow(agenda);
   if(fw)txt(hdr,fw,9,C.amber,true);
@@ -226,21 +226,20 @@ else{
     line.url=link||calshow(e.startDate);
     const bar=line.addStack();bar.size=new Size(3,19);bar.backgroundColor=e.calendar&&e.calendar.color?e.calendar.color:new Color(C.mint);
     line.addSpacer(7);
-    const times=line.addStack();times.layoutVertically();times.size=new Size(77,0);
+    const times=line.addStack();times.layoutVertically();times.size=new Size(52,0);
     const active=agenda.isToday&&e.startDate<=now&&e.endDate>now;
     const soon=agenda.isToday&&!active&&firstUpcoming?untilText(e.startDate):null;
     if(agenda.isToday&&!active)firstUpcoming=false;
     txt(times,active?'СЕЙЧАС':hhmm(e.startDate),10,active?C.mint:C.white,true);
     txt(times,soon||hhmm(e.endDate),8,soon?C.amber:C.muted);
-    line.addSpacer(5);
+    line.addSpacer(6);
     txt(line,e.title||'Без названия',11,C.white,true);
     line.addSpacer();
     if(link){const v=line.addImage(SFSymbol.named('video.fill').image);v.imageSize=new Size(13,13);v.tintColor=new Color(C.mint);}
     widget.addSpacer(2);
   }
-  if(agenda.events.length>3)txt(widget,'Ещё '+(agenda.events.length-3)+' встреч · открыть календарь',9,C.muted);
-  // Когда сегодня мало встреч, внизу — первая встреча завтра
-  else if(agenda.isToday&&agenda.tomorrowFirst){
+  // Внизу — первая встреча завтра, только если сегодня осталось ≤2 встреч (иначе не влезает)
+  if(agenda.isToday&&agenda.events.length<=2&&agenda.tomorrowFirst){
     const t=agenda.tomorrowFirst;
     txt(widget,'Завтра первая: '+hhmm(t.startDate)+' · '+(t.title||'Без названия'),9,C.muted);
   }
