@@ -1,4 +1,4 @@
-// MyDay v16 — Scriptable medium widget
+// MyDay v17 — Scriptable medium widget
 // Work calendar, today's weather, next nonempty day when today's meetings are over.
 // Set the exact calendar title in this field or in the widget Parameter.
 const WORK_CALENDAR_NAME = String(args.widgetParameter || '').trim();
@@ -181,7 +181,7 @@ if(weather){
   else{
     metric(line,'thermometer.medium',weather.high+'°/'+weather.low+'°',C.muted,true);
     metric(line,'umbrella.fill',weather.rain+'%',weather.rain>=RAIN_ALERT?C.amber:C.muted);
-    if(weather.wind!=null)metric(line,'wind',weather.wind+' м/с',weather.wind>=WIND_ALERT?C.amber:C.muted);
+    if(weather.hum!=null)metric(line,'humidity.fill',weather.hum+'%',C.muted);
   }
   // Завтра — всегда отдельной строкой
   if(weather.tmr){
@@ -191,7 +191,6 @@ if(weather){
     txt(tl,'Завтра',FS,C.white,true);tl.addSpacer(8);
     metric(tl,'thermometer.medium',t.high+'°/'+t.low+'°',C.muted,true);
     metric(tl,'umbrella.fill',t.rain+'%',t.rain>=RAIN_ALERT?C.amber:C.muted);
-    metric(tl,'wind',t.wind+' м/с',t.wind>=WIND_ALERT?C.amber:C.muted);
   }
 }
 else{txt(weatherStack,'Погода недоступна',11,C.amber);txt(weatherStack,'Проверь геолокацию',9,C.muted);}
