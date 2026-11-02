@@ -1,4 +1,4 @@
-// MyDay v18 — Scriptable medium widget
+// MyDay v19 — Scriptable medium widget
 // Work calendar, today's weather, next nonempty day when today's meetings are over.
 // Set the exact calendar title in this field or in the widget Parameter.
 const WORK_CALENDAR_NAME = String(args.widgetParameter || '').trim();
@@ -165,12 +165,12 @@ const ico=head.addImage(SFSymbol.named('calendar').image);ico.imageSize=new Size
 head.addSpacer(6);txt(head,'Мой день',11,C.white,true);head.addSpacer();
 txt(head,now.toLocaleDateString('ru-RU',{day:'numeric',month:'short'}),10,C.muted);
 if(counterLine){head.addSpacer(8);txt(head,counterLine,10,C.mint,true);}
-widget.addSpacer(6);
+widget.addSpacer(5);
 const weather=await getWeather();
 if(weather){
   // Строка 1: крупная температура, состояние и диапазон; справа — завтра
   const a=widget.addStack();a.centerAlignContent();
-  txt(a,weather.temp+'°',26,C.white,true);a.addSpacer(8);
+  txt(a,weather.temp+'°',22,C.white,true);a.addSpacer(8);
   const cond=a.addStack();cond.layoutVertically();
   txt(cond,condition(weather.code),12,C.white,true);
   txt(cond,'↑'+weather.high+'°  ↓'+weather.low+'°',10,C.muted);
@@ -183,7 +183,7 @@ if(weather){
     const ui=tr.addImage(SFSymbol.named('umbrella.fill').image);ui.imageSize=new Size(10,10);ui.tintColor=new Color(t.rain>=RAIN_ALERT?C.amber:C.muted);
     tr.addSpacer(3);txt(tr,t.rain+'%',11,t.rain>=RAIN_ALERT?C.amber:C.white,true);
   }
-  widget.addSpacer(6);
+  widget.addSpacer(5);
   const warn=(weather.warnings||[]).concat(weather.aqhi>=AQHI_ALERT?['воздух '+weather.aqhi+' — не бегай на улице']:[]).join(' · ');
   if(warn){txt(widget,'⚠ '+warn,10,C.amber,true);widget.addSpacer(4);}
   // Строка 2: показатели-плашки, равномерно на всю ширину
@@ -195,15 +195,13 @@ if(weather){
   const row=widget.addStack();row.centerAlignContent();
   chips.forEach((c,i)=>{
     if(i)row.addSpacer();
-    const ch=row.addStack();ch.centerAlignContent();ch.backgroundColor=new Color(C.chip);ch.cornerRadius=6;ch.setPadding(3,7,3,7);
+    const ch=row.addStack();ch.centerAlignContent();ch.backgroundColor=new Color(C.chip);ch.cornerRadius=6;ch.setPadding(2,7,2,7);
     const im=ch.addImage(SFSymbol.named(c[0]).image);im.imageSize=new Size(11,11);im.tintColor=new Color(c[2]===C.white?C.muted:c[2]);
     ch.addSpacer(4);txt(ch,c[1],11,c[2],true);
   });
 }
 else{txt(widget,'Погода недоступна',11,C.amber);txt(widget,'Проверь геолокацию',9,C.muted);}
-widget.addSpacer(6);
-const divider=widget.addStack();divider.backgroundColor=new Color(C.line);divider.size=new Size(0,1);
-widget.addSpacer(5);
+widget.addSpacer(7);
 if(agendaError){txt(widget,agendaError,10,C.amber);txt(widget,'Проверь доступ Scriptable к календарю',9,C.muted);}
 else if(!agenda.events.length){txt(widget,agenda.finished?'Сегодня все встречи завершены':'В ближайшие 7 дней встреч нет',11,C.white);txt(widget,'Нажми, чтобы открыть календарь',9,C.muted);}
 else{
@@ -213,25 +211,28 @@ else{
   hdr.addSpacer();
   const fw=freeWindow(agenda);
   if(fw)txt(hdr,fw,9,C.amber,true);
-  widget.addSpacer(5);
+  widget.addSpacer(4);
   let firstUpcoming=true;
   for(const e of agenda.events.slice(0,3)){
     const link=meetingLink(e);
     const line=widget.addStack();line.centerAlignContent();
     line.url=link||calshow(e.startDate);
-    const bar=line.addStack();bar.size=new Size(3,19);bar.backgroundColor=e.calendar&&e.calendar.color?e.calendar.color:new Color(C.mint);
+    const bar=line.addStack();bar.size=new Size(3,15);bar.backgroundColor=e.calendar&&e.calendar.color?e.calendar.color:new Color(C.mint);
     line.addSpacer(7);
-    const times=line.addStack();times.layoutVertically();times.size=new Size(44,0);
+    // Время в одну строку: «09:00 –10:00» или «09:00 через 25 мин»
+    const times=line.addStack();times.bottomAlignContent();times.size=new Size(92,0);
     const active=agenda.isToday&&e.startDate<=now&&e.endDate>now;
     const soon=agenda.isToday&&!active&&firstUpcoming?untilText(e.startDate):null;
     if(agenda.isToday&&!active)firstUpcoming=false;
-    txt(times,active?'СЕЙЧАС':hhmm(e.startDate),10,active?C.mint:C.white,true);
-    txt(times,soon||hhmm(e.endDate),8,soon?C.amber:C.muted);
-    line.addSpacer(8);
+    txt(times,active?'СЕЙЧАС':hhmm(e.startDate),11,active?C.mint:C.white,true);
+    times.addSpacer(3);
+    txt(times,soon||'–'+hhmm(e.endDate),9,soon?C.amber:C.muted);
+    times.addSpacer();
+    line.addSpacer(4);
     txt(line,e.title||'Без названия',11,C.white,true);
     line.addSpacer();
     if(link){const v=line.addImage(SFSymbol.named('video.fill').image);v.imageSize=new Size(13,13);v.tintColor=new Color(C.mint);}
-    widget.addSpacer(2);
+    widget.addSpacer(4);
   }
   // Внизу — первая встреча завтра, только если сегодня осталось ≤2 встреч (иначе не влезает)
   if(agenda.isToday&&agenda.events.length<=2&&agenda.tomorrowFirst){
