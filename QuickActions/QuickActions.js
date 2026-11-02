@@ -20,8 +20,7 @@ const COLORS = {
 //   Slack:   "slack://user?team=<T…>&id=<U…>"  (сразу открывает DM)
 const ACTIONS = [
   ["Happ VPN",     "globe",       "QA VPN",       ""],
-  ["Идея",         "lightbulb",   "QA Idea",
-    "https://www.notion.so/c4e5a6263a8c4d15b8f88485c434e271?v=3f7a9966b0b281beb2ae000cb05a9ebf"],
+  ["Будильник",    "alarm",       "QA Alarm",     ""],
   ["TrainChinese", "book.closed", "QA Translate", ""],
   ["Таймер",       "timer",       "QA Timer",     ""],
   ["Домой",        "house",       "QA Home",      ""],

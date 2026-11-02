@@ -1,4 +1,4 @@
-const VERSION = "1.9.1";
+const VERSION = "1.9.2";
 const FOLDER = "SpendWidget-data-v1";
 const MAX_TEXT = 8192;
 const DUPLICATE_WINDOW_MS = 120000;
@@ -1382,9 +1382,9 @@ function renderWidget(data, fx, mode = "CATEGORIES") {
     }
 
     const W = 610;
-    const H = 72;
-    const chartMax = 44;
-    const plotBottom = 49;
+    const H = 88;
+    const chartMax = 40;
+    const plotBottom = 65;
 
     const ctx = new DrawContext();
     ctx.size = new Size(W, H);
@@ -1425,22 +1425,32 @@ function renderWidget(data, fx, mode = "CATEGORIES") {
         )
       );
 
+      ctx.setTextAlignedCenter();
+      // Сумма за день над столбиком
+      if (points[i].total > 0) {
+        ctx.setFont(Font.semiboldSystemFont(15));
+        ctx.setTextColor(COLORS.text);
+        ctx.drawTextInRect(
+          Math.round(points[i].total).toLocaleString("en-HK"),
+          new Rect(i * cellW, plotBottom - height - 19, cellW, 18)
+        );
+      }
+
       ctx.setFont(
         Font.mediumSystemFont(17)
       );
       ctx.setTextColor(COLORS.soft);
-      ctx.setTextAlignedCenter();
 
       ctx.drawTextInRect(
         points[i].date.slice(8),
         new Rect(
-          i * cellW, 53, cellW, 18
+          i * cellW, 68, cellW, 18
         )
       );
     }
 
     const image = w.addImage(ctx.getImage());
-    image.imageSize = new Size(305, 36);
+    image.imageSize = new Size(305, 44);
 
     w.addSpacer(4);
 

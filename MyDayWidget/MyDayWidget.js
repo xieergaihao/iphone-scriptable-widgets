@@ -1,4 +1,4 @@
-// MyDay v10 — Scriptable medium widget
+// MyDay v11 — Scriptable medium widget
 // Work calendar, today's weather, next nonempty day when today's meetings are over.
 // Set the exact calendar title in this field or in the widget Parameter.
 const WORK_CALENDAR_NAME = String(args.widgetParameter || '').trim();
@@ -158,18 +158,18 @@ const summary=widget.addStack();summary.centerAlignContent();
 const weatherStack=summary.addStack();weatherStack.layoutVertically();
 const weather=await getWeather();
 if(weather){
-  const GAP=11; // расстояние между показателями
+  const GAP=16; // расстояние между показателями
   // Показатель: иконка SF Symbol + текст, с отступом от предыдущего
   const metric=(stack,symbol,text,color,first)=>{
     if(!first)stack.addSpacer(GAP);
     const im=stack.addImage(SFSymbol.named(symbol).image);im.imageSize=new Size(9,9);im.tintColor=new Color(color);
-    stack.addSpacer(3);txt(stack,text,9,color);
+    stack.addSpacer(4);txt(stack,text,9,color);
   };
   const top=weatherStack.addStack();top.bottomAlignContent();
   txt(top,weather.temp+'°  '+condition(weather.code),15,C.white,true);
-  if(weather.sunset){top.addSpacer(12);const si=top.addImage(SFSymbol.named('sunset.fill').image);si.imageSize=new Size(11,11);si.tintColor=new Color(C.muted);top.addSpacer(3);txt(top,weather.sunset,9,C.muted);}
-  if(weather.aqhi!=null){top.addSpacer(10);txt(top,'AQHI '+weather.aqhi,9,weather.aqhi>=AQHI_ALERT?C.amber:weather.aqhi<=3?C.mint:C.muted,true);}
-  weatherStack.addSpacer(3);
+  if(weather.sunset){top.addSpacer(16);const si=top.addImage(SFSymbol.named('sunset.fill').image);si.imageSize=new Size(11,11);si.tintColor=new Color(C.muted);top.addSpacer(3);txt(top,weather.sunset,9,C.muted);}
+  if(weather.aqhi!=null){top.addSpacer(14);txt(top,'AQHI '+weather.aqhi,9,weather.aqhi>=AQHI_ALERT?C.amber:weather.aqhi<=3?C.mint:C.muted,true);}
+  weatherStack.addSpacer(5);
   const warn=(weather.warnings||[]).concat(weather.aqhi>=AQHI_ALERT?['воздух '+weather.aqhi+' — не бегай на улице']:[]).join(' · ');
   const line=weatherStack.addStack();line.centerAlignContent();
   const evening=weather.tmr&&now.getHours()>=TOMORROW_FROM_HOUR;
