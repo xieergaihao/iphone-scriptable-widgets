@@ -1,4 +1,4 @@
-const VERSION = "1.10";
+const VERSION = "1.10.1";
 const FOLDER = "SpendWidget-data-v1";
 const MAX_TEXT = 8192;
 const DUPLICATE_WINDOW_MS = 120000;
@@ -1322,6 +1322,9 @@ function renderWidget(data, fx, mode = "CATEGORIES") {
       ch.backgroundColor = COLORS.card;
       ch.cornerRadius = 6;
       ch.setPadding(2, 7, 2, 7);
+      // Тап по «на проверку» сразу открывает список
+      if (label === "на проверку")
+        ch.url = URLScheme.forRunningScript() + "?view=review";
       addText(ch, label, 10, COLORS.soft);
       ch.addSpacer(4);
       addText(ch, value, 11, color, true);
@@ -2031,6 +2034,7 @@ async function appMenu() {
     const pending = uncategorized(
       localDay(new Date())
     ).length;
+    const toReview = reviewQueue(localDay(new Date())).length;
 
     const choice = await choose(
       "SpendWidget v" + VERSION,
@@ -2046,7 +2050,8 @@ async function appMenu() {
         "Тест уведомления",
         "Экспорт JSON",
         "Обновить курс " + BASE(),
-        "Настройки: валюта и Alipay/WeChat"
+        "Настройки: валюта и Alipay/WeChat",
+        "На проверку (" + toReview + ")"
       ]
     );
 
@@ -2100,6 +2105,37 @@ async function appMenu() {
 
     if (choice === 8)
       await settingsMenu();
+
+    if (choice === 9)
+      await reviewMenu();
+  }
+}
+
+// Операции на проверке за текущий месяц: не входят в сумму до решения
+function reviewQueue(day) {
+  return loadMonth(day).events
+    .filter(e => e.status === "review" && e.day.slice(0, 7) === day.slice(0, 7))
+    .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+}
+
+async function reviewMenu() {
+  while (true) {
+    const list = reviewQueue(localDay(new Date()));
+    if (!list.length) {
+      await message("На проверку", "Всё разобрано");
+      return;
+    }
+    const n = await choose(
+      "На проверку: " + list.length,
+      "Подтверди как расход или исключи",
+      list.map(e =>
+        e.day.slice(8, 10) + "." + e.day.slice(5, 7) + " · " +
+        (e.amountMinor && e.currency ? formatMoney(e.amountMinor, e.currency) : "без суммы") +
+        " · " + (e.merchant || e.source)
+      )
+    );
+    if (n < 0) return;
+    await eventDetails(list[n]);
   }
 }
 
@@ -2146,6 +2182,10 @@ async function main() {
   if (config.runsInApp) {
     cleanupTmp();
     await updateFx(false);
+    if (args.queryParameters && args.queryParameters.view === "review") {
+      await reviewMenu();
+      return;
+    }
     await appMenu();
     return;
   }
