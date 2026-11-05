@@ -1,4 +1,4 @@
-const VERSION = "1.10.1";
+const VERSION = "1.10.2";
 const FOLDER = "SpendWidget-data-v1";
 const MAX_TEXT = 8192;
 const DUPLICATE_WINDOW_MS = 120000;
@@ -636,7 +636,10 @@ function unpackInput(value) {
     // Автоматизация «Транзакция» из Wallet передаёт готовые поля:
     // amount, merchant, card. Тогда текст разбирать не нужно.
     const amount = v.amount ?? v.Amount;
-    if (amount != null && String(amount).trim()) {
+    // Ключ amount есть, но пустой — это касание Octopus на входе в метро
+    // (сумма списывается на выходе). Тоже структурный путь: ingest его пропустит.
+    const hasAmountKey = "amount" in v || "Amount" in v;
+    if (hasAmountKey || (amount != null && String(amount).trim())) {
       const merchant = normalize(textValue(v.merchant ?? v.Merchant ?? ""));
       const card = normalize(textValue(v.card ?? v.Card ?? ""));
       if (source === "Unknown")
@@ -647,7 +650,7 @@ function unpackInput(value) {
         raw: rawText.slice(0, MAX_TEXT),
         tooLong: false,
         structured: {
-          amount: String(amount),
+          amount: amount == null ? "" : String(amount),
           currency: textValue(v.currency ?? v.Currency ?? ""),
           merchant
         }
@@ -795,10 +798,23 @@ function parseNotification(input) {
 
     const hits = [...raw.matchAll(re)];
 
-    if (hits.length !== 1)
+    if (hits.length !== 1) {
+      // Запасной разбор: одна сумма HK$ в тексте — считаем поездкой/покупкой
+      const sums = [...raw.matchAll(/(?:HK\$|HKD)\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)/gi)]
+        .filter(m => !/balance|餘額|余额/i.test(raw.slice(Math.max(0, m.index - 20), m.index)));
+      if (sums.length === 1) {
+        try {
+          const amountMinor = parseMinor(sums[0][1], "HKD");
+          if (amountMinor > 0)
+            return { status: "expense", currency: "HKD", amountMinor, merchant: "Transport", reason: "Octopus: сумма без описания" };
+        } catch (_) {}
+      }
+      if (!sums.length)
+        return { status: "ignored", reason: "Octopus без суммы (вход в метро)" };
       return review(
         "Неизвестный формат платежа Octopus"
       );
+    }
 
     let amountMinor;
 
@@ -2125,17 +2141,24 @@ async function reviewMenu() {
       await message("На проверку", "Всё разобрано");
       return;
     }
+    const junk = list.filter(e => e.source === "Octopus" && !e.amountMinor);
+    const options = list.map(e =>
+        e.day.slice(8, 10) + "." + e.day.slice(5, 7) + " · " +
+        (e.amountMinor && e.currency ? formatMoney(e.amountMinor, e.currency) : "без суммы") +
+        " · " + (e.merchant || e.source));
+    if (junk.length) options.unshift("Исключить все Octopus без суммы (" + junk.length + ")");
     const n = await choose(
       "На проверку: " + list.length,
       "Подтверди как расход или исключи",
-      list.map(e =>
-        e.day.slice(8, 10) + "." + e.day.slice(5, 7) + " · " +
-        (e.amountMinor && e.currency ? formatMoney(e.amountMinor, e.currency) : "без суммы") +
-        " · " + (e.merchant || e.source)
-      )
+      options
     );
     if (n < 0) return;
-    await eventDetails(list[n]);
+    if (junk.length && n === 0) {
+      for (const e of junk)
+        saveOverride(e, { status: "ignored", reason: "Octopus без суммы — исключено", confirmed: true });
+      continue;
+    }
+    await eventDetails(list[junk.length ? n - 1 : n]);
   }
 }
 
