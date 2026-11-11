@@ -1,4 +1,4 @@
-// BodyWidget v2.5 — Scriptable medium widget
+// BodyWidget v2.6 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -280,7 +280,6 @@ function googleDays() {
     const ic = FileManager.iCloud();
     const p = ic.joinPath(ic.documentsDirectory(), "BodyWidget-google.json");
     if (!ic.fileExists(p)) return null;
-    if (!ic.isFileDownloaded(p)) return null;   // докачается к следующему обновлению
     return JSON.parse(ic.readString(p));
   } catch (_) { return null; }
 }
@@ -300,7 +299,6 @@ function mergeGoogle(days) {
 function render() {
   const s = settings();
   const days = readJSON(dataPath, {});
-  try { FileManager.iCloud().downloadFileFromiCloud(FileManager.iCloud().joinPath(FileManager.iCloud().documentsDirectory(), "BodyWidget-google.json")); } catch (_) {}
   const googleAt = mergeGoogle(days);
   const week = lastDays(days, 7);
   const today = week[week.length - 1];
@@ -317,7 +315,8 @@ function render() {
   head.centerAlignContent();
   txt(head, "Тело · сегодня", 11, C.text, true);
   head.addSpacer();
-  const upd = today.updatedAt ? new Date(today.updatedAt) : googleAt ? new Date(googleAt) : null;
+  const times = [today.updatedAt, googleAt].filter(Boolean).map(t => new Date(t)).filter(d => !isNaN(d));
+  const upd = times.length ? new Date(Math.max(...times)) : null;
   // Две последние ночи без сна при свежих шагах — Google Health перестал писать сон в Health
   const yest = week[5] || {};
   const syncBroken = upd && today.sleepMin == null && yest.sleepMin == null && (today.steps != null || yest.steps != null);
@@ -413,7 +412,7 @@ async function menu() {
     a.addCancelAction("Готово");
     const n = await a.presentSheet();
     if (n < 0) return;
-    if (n === 0) await render().presentMedium();
+    if (n === 0) { await ensureGoogle(); await render().presentMedium(); }
     if (n === 1) {
       const s = settings();
       const g = new Alert();
@@ -441,7 +440,17 @@ async function menu() {
   }
 }
 
+// Файл Google Health из iCloud: дожидаемся загрузки до отрисовки
+async function ensureGoogle() {
+  try {
+    const ic = FileManager.iCloud();
+    const p = ic.joinPath(ic.documentsDirectory(), "BodyWidget-google.json");
+    if (ic.fileExists(p)) await ic.downloadFileFromiCloud(p);
+  } catch (_) {}
+}
+
 if (config.runsInWidget) {
+  await ensureGoogle();
   Script.setWidget(render());
 } else if (args.shortcutParameter != null) {
   Script.setShortcutOutput(ingest(args.shortcutParameter));
