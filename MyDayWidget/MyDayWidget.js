@@ -1,4 +1,4 @@
-// MyDay v20 — Scriptable medium widget
+// MyDay v21 — Scriptable medium widget
 // Work calendar, today's weather, next nonempty day when today's meetings are over.
 // Set the exact calendar title in this field or in the widget Parameter.
 const WORK_CALENDAR_NAME = String(args.widgetParameter || '').trim();
@@ -148,6 +148,33 @@ function nextRefresh(agenda){
   return new Date(t);
 }
 
+// Есть ли новая версия скриптов на GitHub (проверка раз в 6 часов)
+async function updateAvailable(){
+  try{
+    const dir=fm.documentsDirectory();
+    const statePath=fm.joinPath(dir,'updater-state.json'), checkPath=fm.joinPath(dir,'updater-check.json');
+    const state=fm.fileExists(statePath)?JSON.parse(fm.readString(statePath)):{};
+    let check=fm.fileExists(checkPath)?JSON.parse(fm.readString(checkPath)):{};
+    if(!check.ts||Date.now()-check.ts>6*3600000){
+      const r=new Request('https://api.github.com/repos/xieergaihao/iphone-scriptable-widgets/commits/main');
+      r.headers={'Accept':'application/vnd.github.sha'};r.timeoutInterval=8;
+      const sha=(await r.loadString()).trim();
+      if(/^[0-9a-f]{40}$/.test(sha)){check={ts:Date.now(),sha};fm.writeString(checkPath,JSON.stringify(check));}
+    }
+    return !!(check.sha&&check.sha!==state.sha);
+  }catch(e){return false;}
+}
+// Сон за прошлую ночь из виджета «Тело»
+function lastSleep(){
+  try{
+    const p=fm.joinPath(fm.joinPath(fm.documentsDirectory(),'BodyWidget-data-v1'),'days.json');
+    if(!fm.fileExists(p))return null;
+    const d=new Date(),key=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    const day=JSON.parse(fm.readString(p))[key];
+    return day&&day.sleepMin?day.sleepMin:null;
+  }catch(e){return null;}
+}
+const SLEEP_ALERT=360; // меньше 6 часов — показываем в шапке
 const widget=new ListWidget();
 widget.backgroundColor=new Color(C.bg);widget.setPadding(10,14,8,14);
 widget.url=calshow(now);
@@ -162,9 +189,15 @@ if(!agendaError){
 }
 const head=widget.addStack();head.centerAlignContent();
 const ico=head.addImage(SFSymbol.named('calendar').image);ico.imageSize=new Size(12,12);ico.tintColor=new Color(C.mint);
-head.addSpacer(6);txt(head,'Мой день',11,C.white,true);head.addSpacer();
-txt(head,now.toLocaleDateString('ru-RU',{day:'numeric',month:'short'}),10,C.muted);
-if(counterLine){head.addSpacer(8);txt(head,counterLine,10,C.mint,true);}
+head.addSpacer(6);txt(head,'Мой день',11,C.white,true);
+const slept=lastSleep();
+if(slept!=null&&slept<SLEEP_ALERT){head.addSpacer(6);txt(head,'сон '+Math.floor(slept/60)+':'+String(slept%60).padStart(2,'0'),10,C.amber,true);}
+const hasUpdate=await updateAvailable();
+if(hasUpdate){head.addSpacer(6);const ub=head.addStack();ub.url='scriptable:///run/Updater';
+  const ui=ub.addImage(SFSymbol.named('arrow.down.circle.fill').image);ui.imageSize=new Size(11,11);ui.tintColor=new Color(C.amber);ub.addSpacer(2);txt(ub,'обновить',10,C.amber,true);}
+head.addSpacer();
+if(!hasUpdate)txt(head,now.toLocaleDateString('ru-RU',{day:'numeric',month:'short'}),10,C.muted);
+if(counterLine){if(!hasUpdate)head.addSpacer(8);txt(head,counterLine,10,C.mint,true);}
 widget.addSpacer(5);
 const weather=await getWeather();
 if(weather){

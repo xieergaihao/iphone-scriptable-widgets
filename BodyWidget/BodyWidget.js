@@ -1,4 +1,4 @@
-// BodyWidget v2.2 — Scriptable medium widget
+// BodyWidget v2.3 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -115,6 +115,31 @@ function clockMin(v) {
   return sec / 60;
 }
 
+// Один отрезок длительности → минуты: «16:00» (мм:сс), «1:05:00» (ч:мм:сс) или число секунд.
+function durMin(x) {
+  const t = String(x).trim();
+  if (/^\d+(:\d{1,2}){1,2}$/.test(t)) {
+    const n = t.split(":").map(Number);
+    return n.length === 3 ? n[0] * 60 + n[1] + n[2] / 60 : n[0] + n[1] / 60;
+  }
+  const v = Number(t.replace(",", "."));
+  return Number.isFinite(v) ? v / 60 : null;
+}
+// Сумма по каждому источнику отдельно и максимум из них: если один и тот же сон
+// или шаги пишут два приложения (Google Health и iPhone), они не складываются дважды.
+function maxBySource(values, sources, toNum, keep) {
+  const sums = {};
+  values.forEach((v, i) => {
+    if (keep && !keep(i)) return;
+    const n = toNum(v);
+    if (n == null) return;
+    const src = String(sources[i] || "?").trim();
+    sums[src] = (sums[src] || 0) + n;
+  });
+  const xs = Object.values(sums);
+  return xs.length ? Math.max(...xs) : null;
+}
+
 function unpack(p) {
   let v = p;
   if (typeof v === "string") { try { v = JSON.parse(v); } catch (_) { v = {}; } }
@@ -123,12 +148,22 @@ function unpack(p) {
   const idx = {};
   for (const k of Object.keys(v)) idx[norm(k)] = v[k];
   const pick = (...keys) => { for (const k of keys) if (idx[norm(k)] != null) return idx[norm(k)]; return null; };
-  const steps = num(pick("steps", "Steps", "шаги"));
+  let steps = num(pick("steps", "Steps", "шаги"));
+  const stepVals = listOf(pick("steps")), stepSrc = listOf(pick("stepsSource"));
+  if (stepSrc.length && stepSrc.length === stepVals.length)
+    steps = maxBySource(stepVals, stepSrc, x => num(x, false));
   const sleepRaw = pick("sleepMin", "sleep", "Sleep", "сон");
-  let sleepMin = mergedSleepMin(pick("sleepStart", "start", "startDate"), pick("sleepEnd", "end", "endDate"));
+  // Новый шорткат передаёт фазы и источники: считаем только сон (без «В кровати» и «Бодрствование»)
+  const durs = listOf(sleepRaw), stages = listOf(pick("sleepStage")), sleepSrc = listOf(pick("sleepSource"));
+  let bySource = null;
+  if (stages.length && stages.length === durs.length) {
+    bySource = maxBySource(durs, sleepSrc.length === durs.length ? sleepSrc : durs.map(() => "?"), durMin,
+      i => !/in bed|awake|в кровати|в постели|бодрств/i.test(stages[i]));
+  }
+  let sleepMin = bySource != null ? bySource : mergedSleepMin(pick("sleepStart", "start", "startDate"), pick("sleepEnd", "end", "endDate"));
   const st = listOf(pick("sleepStart", "start", "startDate")), en = listOf(pick("sleepEnd", "end", "endDate"));
   const rawText = sleepRaw == null ? "" : String(sleepRaw).trim();
-  let how = sleepMin != null ? "интервалы" : !("sleepmin" in idx) ? "в команде нет sleepMin" : !rawText ? "в Health нет сна за сутки" : "";
+  let how = bySource != null ? "по источникам" : sleepMin != null ? "интервалы" : !("sleepmin" in idx) ? "в команде нет sleepMin" : !rawText ? "в Health нет сна за сутки" : "";
   if (sleepMin == null) {
     sleepMin = clockMin(sleepRaw);
     // Health отдаёт каждый отрезок сна дважды (два источника), сумма удвоена.

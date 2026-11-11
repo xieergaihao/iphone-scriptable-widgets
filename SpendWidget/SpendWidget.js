@@ -1,4 +1,4 @@
-const VERSION = "1.10.3";
+const VERSION = "1.11";
 const FOLDER = "SpendWidget-data-v1";
 const MAX_TEXT = 8192;
 const DUPLICATE_WINDOW_MS = 120000;
@@ -2170,6 +2170,50 @@ async function reviewMenu() {
   }
 }
 
+// ===== WEEKLY SUMMARY =====
+// В воскресенье вечером (с 19:00) один раз присылает итог недели.
+function weekTotals(day, fx) {
+  const d = new Date(day + "T12:00:00");
+  const dayAt = n => localDay(new Date(d.getFullYear(), d.getMonth(), d.getDate() - n, 12));
+  const from = dayAt(13), mid = dayAt(6);
+  const months = [...new Set([from.slice(0, 7), mid.slice(0, 7), day.slice(0, 7)])];
+  const events = months.flatMap(m => loadMonth(m + "-01").events);
+  let cur = 0, prev = 0;
+  const cats = {};
+  for (const e of events) {
+    if (!["expense", "refund"].includes(e.status) || e.day < from || e.day > day) continue;
+    const a = hkdOf(e, fx);
+    if (a === null) continue;
+    if (e.day >= mid) {
+      cur += a;
+      const c = categoryOf(e.merchant || "");
+      cats[c] = (cats[c] || 0) + a;
+    } else prev += a;
+  }
+  const top = Object.entries(cats).sort((x, y) => y[1] - x[1])[0];
+  return { cur, prev, top };
+}
+
+async function weeklyNotify(day, fx) {
+  const now = new Date();
+  if (now.getDay() !== 0 || now.getHours() < 19) return;
+  const s = store();
+  const flag = s.fm.joinPath(s.root, "weekly-notified.txt");
+  if (s.fm.fileExists(flag) && s.fm.readString(flag).trim() === day) return;
+  const t = weekTotals(day, fx);
+  const n = new Notification();
+  n.title = "Расходы за неделю: " + shortHKD(Math.round(t.cur));
+  const parts = [];
+  if (t.top) parts.push("Больше всего — " + t.top[0] + " (" + shortHKD(Math.round(t.top[1])) + ")");
+  if (t.prev > 0) {
+    const ch = Math.round((t.cur - t.prev) / t.prev * 100);
+    parts.push((ch >= 0 ? "▲ " : "▼ ") + Math.abs(ch) + "% к прошлой неделе");
+  }
+  n.body = parts.join(". ") || "Трат за неделю не было";
+  await n.schedule();
+  s.fm.writeString(flag, day);
+}
+
 // ===== MAIN =====
 
 async function main() {
@@ -2186,6 +2230,8 @@ async function main() {
         mode
       )
     );
+
+    try { await weeklyNotify(day, fx); } catch (_) {}
 
     return;
   }

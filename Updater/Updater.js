@@ -1,4 +1,4 @@
-// Updater v3: ставит свежие скрипты из GitHub.
+// Updater v4: ставит свежие скрипты из GitHub.
 // Находит скрипт по содержимому, а не только по имени:
 // если QuickActions у тебя лежит как «Untitled Script», обновит его.
 // Историю расходов не трогает.
@@ -88,6 +88,15 @@ for (const [path, defaultName, sign] of FILES) {
   } catch (e) {
     report.push("✗ " + path + ": " + e.message);
   }
+}
+
+// Запоминаем установленную версию: «Мой день» по ней понимает, что есть обновление
+if (REF !== "main") {
+  try {
+    const lfm = FileManager.local();
+    lfm.writeString(lfm.joinPath(lfm.documentsDirectory(), "updater-state.json"),
+      JSON.stringify({ sha: REF, at: new Date().toISOString() }));
+  } catch (_) {}
 }
 
 const text = report.join("\n");
