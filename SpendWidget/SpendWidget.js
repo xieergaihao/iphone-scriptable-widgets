@@ -1,4 +1,4 @@
-const VERSION = "1.10.2";
+const VERSION = "1.10.3";
 const FOLDER = "SpendWidget-data-v1";
 const MAX_TEXT = 8192;
 const DUPLICATE_WINDOW_MS = 120000;
@@ -694,6 +694,12 @@ function parseNotification(input) {
       /^(notification|уведомление|\[object object\]|ok)$/i
         .test(raw))
     return review("Нет текста покупки");
+
+  // Служебные уведомления банка без денег: вход в аккаунт, безопасность, пароль
+  if (/\b(log ?in|sign[- ]?in|login attempt|new device|password|security alert|unusual activity|non-familiar location)\b|登入|登录|新设备|вход в/i.test(raw) &&
+      !/(HK\$|HKD|US\$|USD|CNY|RMB|[¥￥€£])\s*[0-9]/i.test(raw)) {
+    return { status: "ignored", reason: "Служебное уведомление банка" };
+  }
 
   if (/\b(otp|one[- ]time (?:password|code)|verification code|security code)\b|验证码|驗證碼|код подтверждения/i.test(raw)) {
     return {
@@ -2141,12 +2147,14 @@ async function reviewMenu() {
       await message("На проверку", "Всё разобрано");
       return;
     }
-    const junk = list.filter(e => e.source === "Octopus" && !e.amountMinor);
+    // Мусор: Octopus без суммы и служебные уведомления (вход в банк и т.п.)
+    const junk = list.filter(e => !e.amountMinor &&
+      (e.source === "Octopus" || parseNotification({ source: e.source, raw: e.raw, tooLong: false }).status === "ignored"));
     const options = list.map(e =>
         e.day.slice(8, 10) + "." + e.day.slice(5, 7) + " · " +
         (e.amountMinor && e.currency ? formatMoney(e.amountMinor, e.currency) : "без суммы") +
         " · " + (e.merchant || e.source));
-    if (junk.length) options.unshift("Исключить все Octopus без суммы (" + junk.length + ")");
+    if (junk.length) options.unshift("Исключить мусор: Octopus без суммы и служебные (" + junk.length + ")");
     const n = await choose(
       "На проверку: " + list.length,
       "Подтверди как расход или исключи",
@@ -2155,7 +2163,7 @@ async function reviewMenu() {
     if (n < 0) return;
     if (junk.length && n === 0) {
       for (const e of junk)
-        saveOverride(e, { status: "ignored", reason: "Octopus без суммы — исключено", confirmed: true });
+        saveOverride(e, { status: "ignored", reason: "Служебное или без суммы — исключено", confirmed: true });
       continue;
     }
     await eventDetails(list[junk.length ? n - 1 : n]);

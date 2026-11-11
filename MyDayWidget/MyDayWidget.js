@@ -1,4 +1,4 @@
-// MyDay v19 — Scriptable medium widget
+// MyDay v20 — Scriptable medium widget
 // Work calendar, today's weather, next nonempty day when today's meetings are over.
 // Set the exact calendar title in this field or in the widget Parameter.
 const WORK_CALENDAR_NAME = String(args.widgetParameter || '').trim();
@@ -64,7 +64,7 @@ async function getPosition(cache){
 async function hkWarnings(pos){
   if(!pos||pos.lat<22.1||pos.lat>22.6||pos.lon<113.8||pos.lon>114.5)return [];
   const r=await new Request('https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=warnsum&lang=en').loadJSON();
-  const names={WTCSGNL:'Тайфун',WRAIN:'Ливень',WTS:'Гроза',WHOT:'Жара',WCOLD:'Холод',WFIRE:'Пожароопасно',WMSGNL:'Муссон',WL:'Оползни',WTMW:'Цунами',WFROST:'Заморозки',WFNTSA:'Затопление'};
+  const names={WTCSGNL:'Тайфун',WRAIN:'Ливень',WTS:'Гроза',WHOT:'Жара',WCOLD:'Холод',WMSGNL:'Муссон',WL:'Оползни',WTMW:'Цунами',WFROST:'Заморозки',WFNTSA:'Затопление'};
   return Object.keys(r||{}).filter(k=>names[k]).map(k=>{
     const code=String(r[k].code||'');
     let s=names[k];
