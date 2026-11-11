@@ -1,4 +1,4 @@
-// BodyWidget v2.6 — Scriptable medium widget
+// BodyWidget v2.7 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -406,8 +406,13 @@ function render() {
 async function menu() {
   while (true) {
     const a = new Alert();
-    a.title = "BodyWidget";
-    a.message = "Данные приходят из команды «Тело: обновить»";
+    a.title = "BodyWidget v2.7";
+    let g = "нет файла";
+    try {
+      const ic = FileManager.iCloud(), gp = ic.joinPath(ic.documentsDirectory(), "BodyWidget-google.json");
+      if (ic.fileExists(gp)) { await ic.downloadFileFromiCloud(gp); g = "от " + (JSON.parse(ic.readString(gp)).generatedAt || "?"); }
+    } catch (e) { g = "iCloud недоступен: " + e.message; }
+    a.message = "Google Health: " + g + "\nApple Health: шорткат Health";
     ["Предпросмотр", "Цели: шаги и сон", "Тестовые данные (без Health)", "Очистить историю"].forEach(x => a.addAction(x));
     a.addCancelAction("Готово");
     const n = await a.presentSheet();

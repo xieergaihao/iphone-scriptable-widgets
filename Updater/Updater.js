@@ -23,6 +23,7 @@ const FILES = [
   ["QuickActions/QuickActions.js", "QuickActions", /^\/\/ QuickActions/],
   ["MyDayWidget/MyDayWidget.js", "MyDay", /^\s*\/\/ MyDay v/],
   ["BodyWidget/BodyWidget.js", "BodyWidget", /^\/\/ BodyWidget v/],
+  ["Body/Тело.js", "Тело", /^\/\/ Тело v/],
   ["Updater/Updater.js", "Updater", /^\/\/ Updater/]
 ];
 
