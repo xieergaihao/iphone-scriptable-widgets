@@ -55,7 +55,7 @@ const scripts = localScripts();
 
 for (const [path, defaultName, sign] of FILES) {
   try {
-    const req = new Request(RAW + path + "?t=" + Date.now());
+    const req = new Request(RAW + encodeURI(path) + "?t=" + Date.now());
     req.timeoutInterval = 15;
     const code = await req.loadString();
 
