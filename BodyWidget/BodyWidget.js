@@ -1,4 +1,4 @@
-// BodyWidget v2.7 — Scriptable medium widget
+// BodyWidget v2.8 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -277,6 +277,10 @@ function readiness(today, prev, goalMin) {
 // Там есть HRV, которого нет в Apple Health. Сон, пульс и HRV берём оттуда, шаги — максимум.
 function googleDays() {
   try {
+    const lp = fm.joinPath(root, "google.json");     // копия с Mac через секретный gist
+    if (fm.fileExists(lp)) return JSON.parse(fm.readString(lp));
+  } catch (_) {}
+  try {
     const ic = FileManager.iCloud();
     const p = ic.joinPath(ic.documentsDirectory(), "BodyWidget-google.json");
     if (!ic.fileExists(p)) return null;
@@ -406,12 +410,18 @@ function render() {
 async function menu() {
   while (true) {
     const a = new Alert();
-    a.title = "BodyWidget v2.7";
+    a.title = "BodyWidget v2.8";
     let g = "нет файла";
     try {
       const ic = FileManager.iCloud(), gp = ic.joinPath(ic.documentsDirectory(), "BodyWidget-google.json");
       if (ic.fileExists(gp)) { await ic.downloadFileFromiCloud(gp); g = "от " + (JSON.parse(ic.readString(gp)).generatedAt || "?"); }
     } catch (e) { g = "iCloud недоступен: " + e.message; }
+    try {
+      await ensureGoogle();
+      const lp = fm.joinPath(root, "google.json");
+      if (fm.fileExists(lp)) g = "от " + (JSON.parse(fm.readString(lp)).generatedAt || "?") + " (gist)";
+      else if (!Keychain.contains(GIST_KEY)) g = "нет ссылки на gist";
+    } catch (_) {}
     a.message = "Google Health: " + g + "\nApple Health: шорткат Health";
     ["Предпросмотр", "Цели: шаги и сон", "Тестовые данные (без Health)", "Очистить историю"].forEach(x => a.addAction(x));
     a.addCancelAction("Готово");
@@ -446,7 +456,17 @@ async function menu() {
 }
 
 // Файл Google Health из iCloud: дожидаемся загрузки до отрисовки
+// Ссылка на секретный gist хранится в Keychain телефона (не в публичном репозитории).
+const GIST_KEY = "bodywidget-gist";
 async function ensureGoogle() {
+  try {
+    if (Keychain.contains(GIST_KEY)) {
+      const r = new Request(Keychain.get(GIST_KEY) + "?t=" + Date.now());
+      r.timeoutInterval = 10;
+      const j = await r.loadJSON();
+      if (j && j.days) fm.writeString(fm.joinPath(root, "google.json"), JSON.stringify(j));
+    }
+  } catch (_) {}
   try {
     const ic = FileManager.iCloud();
     const p = ic.joinPath(ic.documentsDirectory(), "BodyWidget-google.json");
