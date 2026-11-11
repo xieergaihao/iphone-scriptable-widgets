@@ -1,4 +1,4 @@
-// BodyWidget v2.4 — Scriptable medium widget
+// BodyWidget v2.5 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -253,24 +253,55 @@ function tile(row, title, value, sub, subColor) {
 // Готовность 0–100 по тому, что есть в Health: сон к цели и пульс покоя к своей норме за 7 дней.
 // Это наша оценка, не Fitbit Daily Readiness (её Google Health в Apple Health не передаёт, как и HRV).
 function readiness(today, prev, goalMin) {
-  if (today.sleepMin == null && today.restingHR == null) return null;
+  if (today.sleepMin == null && today.restingHR == null && today.hrv == null) return null;
   let score = 0, weight = 0;
+  // Вариабельность пульса (HRV) к своей норме за 7 дней — главный сигнал восстановления
+  const hrvAvg = avg(prev.map(d => d.hrv));
+  if (today.hrv != null && hrvAvg) {
+    const r = Math.max(0, Math.min(1, 0.75 + (today.hrv / hrvAvg - 1) * 2.5));
+    score += r * 40; weight += 40;
+  }
   if (today.sleepMin != null) {
-    const r = Math.min(today.sleepMin / goalMin, 1.1) / 1.1;      // 0..1
-    score += r * 60; weight += 60;
+    const r = Math.min(today.sleepMin / goalMin, 1.1) / 1.1;
+    score += r * 35; weight += 35;
   }
   const hrAvg = avg(prev.map(d => d.restingHR));
   if (today.restingHR != null && hrAvg != null) {
-    const dlt = today.restingHR - hrAvg;                            // выше нормы — хуже
-    const r = Math.max(0, Math.min(1, 0.75 - dlt * 0.12));
-    score += r * 40; weight += 40;
+    const r = Math.max(0, Math.min(1, 0.75 - (today.restingHR - hrAvg) * 0.12));
+    score += r * 25; weight += 25;
   }
   return weight ? Math.round(score / weight * 100) : null;
+}
+
+// Данные Google Health (Fitbit Air), которые мак кладёт в iCloud-папку Scriptable.
+// Там есть HRV, которого нет в Apple Health. Сон, пульс и HRV берём оттуда, шаги — максимум.
+function googleDays() {
+  try {
+    const ic = FileManager.iCloud();
+    const p = ic.joinPath(ic.documentsDirectory(), "BodyWidget-google.json");
+    if (!ic.fileExists(p)) return null;
+    if (!ic.isFileDownloaded(p)) return null;   // докачается к следующему обновлению
+    return JSON.parse(ic.readString(p));
+  } catch (_) { return null; }
+}
+function mergeGoogle(days) {
+  const g = googleDays();
+  if (!g || !g.days) return null;
+  for (const [k, v] of Object.entries(g.days)) {
+    const d = days[k] = { ...(days[k] || {}) };
+    if (v.sleepMin != null) d.sleepMin = v.sleepMin;
+    if (v.restingHR != null) d.restingHR = v.restingHR;
+    if (v.hrv != null) d.hrv = v.hrv;
+    if (v.steps != null) d.steps = Math.max(v.steps, d.steps || 0);
+  }
+  return g.generatedAt || null;
 }
 
 function render() {
   const s = settings();
   const days = readJSON(dataPath, {});
+  try { FileManager.iCloud().downloadFileFromiCloud(FileManager.iCloud().joinPath(FileManager.iCloud().documentsDirectory(), "BodyWidget-google.json")); } catch (_) {}
+  const googleAt = mergeGoogle(days);
   const week = lastDays(days, 7);
   const today = week[week.length - 1];
   const prev = week.slice(0, -1);
@@ -286,7 +317,7 @@ function render() {
   head.centerAlignContent();
   txt(head, "Тело · сегодня", 11, C.text, true);
   head.addSpacer();
-  const upd = today.updatedAt ? new Date(today.updatedAt) : null;
+  const upd = today.updatedAt ? new Date(today.updatedAt) : googleAt ? new Date(googleAt) : null;
   // Две последние ночи без сна при свежих шагах — Google Health перестал писать сон в Health
   const yest = week[5] || {};
   const syncBroken = upd && today.sleepMin == null && yest.sleepMin == null && (today.steps != null || yest.steps != null);
@@ -322,6 +353,13 @@ function render() {
     const dlt = Math.round(today.restingHR - hrAvg);
     hrSub = (dlt > 0 ? "↑ +" : dlt < 0 ? "↓ " : "= ") + (dlt || "") + " к ср. 7д";
     hrColor = dlt >= 3 ? C.warn : C.mint;
+  }
+  // HRV из Google Health: выше своей нормы — хорошо
+  const hrvAvg = avg(prev.map(d => d.hrv));
+  if (today.hrv != null) {
+    const pctH = hrvAvg ? Math.round((today.hrv / hrvAvg - 1) * 100) : null;
+    hrSub = "HRV " + Math.round(today.hrv) + (pctH != null ? (pctH >= 0 ? " ↑" : " ↓") + Math.abs(pctH) + "%" : "");
+    hrColor = pctH != null && pctH <= -10 ? C.warn : C.mint;
   }
   tile(row, "ПУЛЬС ПОКОЯ", today.restingHR != null ? today.restingHR + " уд" : "—", hrSub, hrColor);
 
