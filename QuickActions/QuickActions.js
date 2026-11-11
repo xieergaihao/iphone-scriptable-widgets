@@ -20,9 +20,9 @@ const COLORS = {
 //   Slack:   "slack://user?team=<T…>&id=<U…>"  (сразу открывает DM)
 const ACTIONS = [
   ["Happ VPN",     "globe",       "QA VPN",       ""],
-  ["Будильник",    "alarm",       "QA Alarm",     ""],
+  ["Будильник",    "alarm",       "QA Alarm",     "clock-alarm://"],
   ["Перевод",      "camera.viewfinder", "QA Translate", "googletranslate://"],
-  ["Таймер",       "timer",       "QA Timer",     ""],
+  ["Таймер",       "timer",       "QA Timer",     "clock-timer://"],
   ["Домой",        "house",       "QA Home",      ""],
   ["Slack себе",   "bubble.left", "QA Slack",
     "https://joom-team.slack.com/archives/D07BHUN4B0U"]
