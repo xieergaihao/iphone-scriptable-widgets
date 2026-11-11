@@ -1,4 +1,4 @@
-// BodyWidget v2.3 — Scriptable medium widget
+// BodyWidget v2.4 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -250,6 +250,24 @@ function tile(row, title, value, sub, subColor) {
   return c;
 }
 
+// Готовность 0–100 по тому, что есть в Health: сон к цели и пульс покоя к своей норме за 7 дней.
+// Это наша оценка, не Fitbit Daily Readiness (её Google Health в Apple Health не передаёт, как и HRV).
+function readiness(today, prev, goalMin) {
+  if (today.sleepMin == null && today.restingHR == null) return null;
+  let score = 0, weight = 0;
+  if (today.sleepMin != null) {
+    const r = Math.min(today.sleepMin / goalMin, 1.1) / 1.1;      // 0..1
+    score += r * 60; weight += 60;
+  }
+  const hrAvg = avg(prev.map(d => d.restingHR));
+  if (today.restingHR != null && hrAvg != null) {
+    const dlt = today.restingHR - hrAvg;                            // выше нормы — хуже
+    const r = Math.max(0, Math.min(1, 0.75 - dlt * 0.12));
+    score += r * 40; weight += 40;
+  }
+  return weight ? Math.round(score / weight * 100) : null;
+}
+
 function render() {
   const s = settings();
   const days = readJSON(dataPath, {});
@@ -272,8 +290,16 @@ function render() {
   // Две последние ночи без сна при свежих шагах — Google Health перестал писать сон в Health
   const yest = week[5] || {};
   const syncBroken = upd && today.sleepMin == null && yest.sleepMin == null && (today.steps != null || yest.steps != null);
+  const ready = readiness(today, prev, s.sleepGoalMin);
   if (syncBroken) txt(head, "сна нет 2 ночи — открой Google Health", 9, C.warn, true);
-  else txt(head, upd ? "обновлено " + pad(upd.getHours()) + ":" + pad(upd.getMinutes()) : "нет данных за сегодня", 9, upd ? C.soft : C.warn);
+  else {
+    if (ready != null) {
+      txt(head, "готовность ", 10, C.soft);
+      txt(head, String(ready), 11, ready >= 70 ? C.mint : ready >= 50 ? C.text : C.warn, true);
+      head.addSpacer(6);
+    }
+    txt(head, upd ? pad(upd.getHours()) + ":" + pad(upd.getMinutes()) : "нет данных за сегодня", 9, upd ? C.soft : C.warn);
+  }
   w.addSpacer(8);
 
   const row = w.addStack();
