@@ -51,7 +51,10 @@ CLOCK = {"AppIntentIdentifier": "CreateAlarmIntent", "BundleIdentifier": "com.ap
 
 
 def alarm(when):
-    return act("com.apple.clock.CreateAlarmIntent", {"dateComponents": when, "AppIntentDescriptor": CLOCK})
+    # реальный идентификатор экшена «Добавить будильник» (как в cherri): MobileTimerIntents.MTCreateAlarmIntent
+    return act("com.apple.mobiletimer-framework.MobileTimerIntents.MTCreateAlarmIntent", {
+        "dateComponents": when, "name": text("Будильник"), "allowsSnooze": True,
+        "ShowWhenRun": False, "AppIntentDescriptor": CLOCK})
 
 
 def timer_body(t):

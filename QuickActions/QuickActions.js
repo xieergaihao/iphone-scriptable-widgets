@@ -21,7 +21,7 @@ const COLORS = {
 const ACTIONS = [
   ["Happ VPN",     "globe",       "QA VPN",       ""],
   ["Будильник",    "alarm",       "QA Alarm",     ""],
-  ["Перевод",      "camera.viewfinder", "Перевести скриншот", ""],
+  ["Перевод",      "character.bubble", "QA Translate", "googletranslate://"],
   ["Таймер",       "timer",       "QA Timer",     ""],
   ["Домой",        "house",       "QA Home",      ""],
   ["Slack себе",   "bubble.left", "QA Slack",

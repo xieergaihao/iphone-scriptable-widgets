@@ -1,4 +1,4 @@
-// Тело v2.8 — Scriptable medium widget
+// Тело v2.9 — Scriptable medium widget
 // Сон, шаги и пульс покоя из Apple Health (туда их пишет Google Health / Fitbit).
 // Данные приходят из команды «Тело: обновить» через Run Script с параметром-словарём:
 //   steps — шаги за сегодня, sleepMin — сон за ночь в минутах, restingHR — пульс покоя.
@@ -243,7 +243,7 @@ function tile(row, title, value, sub, subColor) {
   c.backgroundColor = new Color(C.card);
   c.cornerRadius = 8;
   c.setPadding(6, 8, 6, 8);
-  c.size = new Size(98, 0);
+  c.size = new Size(76, 0);
   txt(c, title, 8, C.soft, true);
   txt(c, value, 14, C.text, true);
   txt(c, sub, 8, subColor || C.soft);
@@ -295,6 +295,7 @@ function mergeGoogle(days) {
     if (v.sleepMin != null) d.sleepMin = v.sleepMin;
     if (v.restingHR != null) d.restingHR = v.restingHR;
     if (v.hrv != null) d.hrv = v.hrv;
+    for (const f of ["deepMin", "remMin", "bedtime", "resp", "tempDev"]) if (v[f] != null) d[f] = v[f];
     if (v.steps != null) d.steps = Math.max(v.steps, d.steps || 0);
   }
   return g.generatedAt || null;
@@ -345,26 +346,26 @@ function render() {
     sleepAvg != null ? "в ср. " + Math.floor(sleepAvg / 60) + "ч " + pad(Math.round(sleepAvg % 60)) : "цель " + Math.round(s.sleepGoalMin / 6) / 10 + " ч",
     today.sleepMin == null ? C.soft : sleepOk ? C.mint : C.warn);
   row.addSpacer();
-  // Шаги
-  const pct = today.steps != null ? Math.min(100, Math.round(today.steps / s.stepsGoal * 100)) : 0;
-  tile(row, "ШАГИ", fmtInt(today.steps), pct + "% от " + fmtInt(s.stepsGoal), pct >= 100 ? C.mint : C.soft);
+  // HRV из Google Health: выше своей нормы — хорошо
+  const hrvAvg = avg(prev.map(d => d.hrv));
+  const pctH = today.hrv != null && hrvAvg ? Math.round((today.hrv / hrvAvg - 1) * 100) : null;
+  tile(row, "HRV", today.hrv != null ? Math.round(today.hrv) + " мс" : "—",
+    pctH != null ? (pctH >= 0 ? "↑ " : "↓ ") + Math.abs(pctH) + "% к 7д" : hrvAvg ? "ср. " + Math.round(hrvAvg) : "нет данных",
+    pctH == null ? C.soft : pctH <= -10 ? C.warn : C.mint);
   row.addSpacer();
   // Пульс покоя: ниже среднего — хорошо
   const hrAvg = avg(prev.map(d => d.restingHR));
-  let hrSub = "пульс покоя", hrColor = C.soft;
+  let hrSub = "уд/мин", hrColor = C.soft;
   if (today.restingHR != null && hrAvg != null) {
     const dlt = Math.round(today.restingHR - hrAvg);
-    hrSub = (dlt > 0 ? "↑ +" : dlt < 0 ? "↓ " : "= ") + (dlt || "") + " к ср. 7д";
+    hrSub = (dlt > 0 ? "↑ +" + dlt : dlt < 0 ? "↓ " + Math.abs(dlt) : "= ") + " к 7д";
     hrColor = dlt >= 3 ? C.warn : C.mint;
   }
-  // HRV из Google Health: выше своей нормы — хорошо
-  const hrvAvg = avg(prev.map(d => d.hrv));
-  if (today.hrv != null) {
-    const pctH = hrvAvg ? Math.round((today.hrv / hrvAvg - 1) * 100) : null;
-    hrSub = "HRV " + Math.round(today.hrv) + (pctH != null ? (pctH >= 0 ? " ↑" : " ↓") + Math.abs(pctH) + "%" : "");
-    hrColor = pctH != null && pctH <= -10 ? C.warn : C.mint;
-  }
-  tile(row, "ПУЛЬС ПОКОЯ", today.restingHR != null ? today.restingHR + " уд" : "—", hrSub, hrColor);
+  tile(row, "ПУЛЬС", today.restingHR != null ? today.restingHR + " уд" : "—", hrSub, hrColor);
+  row.addSpacer();
+  // Шаги
+  const pct = today.steps != null ? Math.min(100, Math.round(today.steps / s.stepsGoal * 100)) : 0;
+  tile(row, "ШАГИ", fmtInt(today.steps), pct + "% цели", pct >= 100 ? C.mint : C.soft);
 
   w.addSpacer(4);
 
@@ -398,7 +399,12 @@ function render() {
   const img = w.addImage(ctx.getImage());
   img.imageSize = new Size(305, 40);
   w.addSpacer(3);
-  txt(w, "сон за 7 ночей · пунктир — цель " + (s.sleepGoalMin / 60).toFixed(1).replace(".0", "") + " ч", 8, C.soft);
+  const det = [];
+  if (today.bedtime) det.push("отбой " + today.bedtime);
+  if (today.deepMin != null) det.push("глубокий " + Math.floor(today.deepMin / 60) + ":" + pad(today.deepMin % 60));
+  if (today.remMin != null) det.push("REM " + Math.floor(today.remMin / 60) + ":" + pad(today.remMin % 60));
+  if (today.tempDev != null && Math.abs(today.tempDev) >= 0.5) det.push("t° " + (today.tempDev > 0 ? "+" : "") + today.tempDev.toFixed(1));
+  txt(w, det.length ? det.join(" · ") : "сон за 7 ночей · пунктир — цель " + (s.sleepGoalMin / 60).toFixed(1).replace(".0", "") + " ч", 8, C.soft);
 
   // Обновляем картинку часто не нужно: данные приходят только из команды.
   // Просим iOS перерисовать через 15 мин; после запусков команды (9:00, 13:00, 21:00)
@@ -410,7 +416,7 @@ function render() {
 async function menu() {
   while (true) {
     const a = new Alert();
-    a.title = "Тело v2.8";
+    a.title = "Тело v2.9";
     let g = "нет файла";
     try {
       const ic = FileManager.iCloud(), gp = ic.joinPath(ic.documentsDirectory(), "BodyWidget-google.json");
