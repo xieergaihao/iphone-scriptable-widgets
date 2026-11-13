@@ -1,4 +1,4 @@
-// MyDay v21 — Scriptable medium widget
+// MyDay v22 — Scriptable medium widget
 // Work calendar, today's weather, next nonempty day when today's meetings are over.
 // Set the exact calendar title in this field or in the widget Parameter.
 const WORK_CALENDAR_NAME = String(args.widgetParameter || '').trim();
@@ -51,19 +51,24 @@ function untilText(start){
   const h=Math.floor(min/60),r=min%60;
   return 'через '+h+' ч'+(r?' '+r+' мин':'');
 }
+// Виджету iOS даёт ~30 с на всё: каждый внешний вызов ограничиваем по времени
+function withTimeout(promise,ms,fallback){return Promise.race([promise,new Promise(res=>Timer.schedule(ms,false,()=>res(fallback)))]);}
+function req(url,sec=6){const r=new Request(url);r.timeoutInterval=sec;return r;}
+const HOME_POS={lat:22.282,lon:114.192}; // Тин Хау — если GPS не ответил
 function readCache(){try{if(fm.fileExists(cachePath))return JSON.parse(fm.readString(cachePath));}catch(e){}return {};}
 async function getPosition(cache){
   if(cache.pos && Date.now()-cache.pos.ts<LOCATION_CACHE_MINUTES*60000)return cache.pos;
   try{
     Location.setAccuracyToThreeKilometers();
-    const p=await Location.current();
+    const p=await withTimeout(Location.current(),4000,null);
+    if(!p)return cache.pos||{...HOME_POS,ts:0};
     return {lat:p.latitude,lon:p.longitude,ts:Date.now()};
-  }catch(e){return cache.pos||null;}
+  }catch(e){return cache.pos||{...HOME_POS,ts:0};}
 }
 // Сигналы Обсерватории Гонконга (тайфун, дождь, жара и т.п.)
 async function hkWarnings(pos){
   if(!pos||pos.lat<22.1||pos.lat>22.6||pos.lon<113.8||pos.lon>114.5)return [];
-  const r=await new Request('https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=warnsum&lang=en').loadJSON();
+  const r=await req('https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=warnsum&lang=en').loadJSON();
   const names={WTCSGNL:'Тайфун',WRAIN:'Ливень',WTS:'Гроза',WHOT:'Жара',WCOLD:'Холод',WMSGNL:'Муссон',WL:'Оползни',WTMW:'Цунами',WFROST:'Заморозки',WFNTSA:'Затопление'};
   return Object.keys(r||{}).filter(k=>names[k]).map(k=>{
     const code=String(r[k].code||'');
@@ -76,7 +81,7 @@ async function hkWarnings(pos){
 // Индекс качества воздуха EPD (1–10+), только в Гонконге
 async function hkAqhi(pos){
   if(!pos||pos.lat<22.1||pos.lat>22.6||pos.lon<113.8||pos.lon>114.5)return null;
-  const list=await new Request('https://dashboard.data.gov.hk/api/aqhi-individual?format=json').loadJSON();
+  const list=await req('https://dashboard.data.gov.hk/api/aqhi-individual?format=json').loadJSON();
   const row=(list||[]).find(x=>x.station===AQHI_STATION)||(list||[])[0];
   const v=row?parseInt(String(row.aqhi),10):NaN;
   return Number.isFinite(v)?v:null;
@@ -89,13 +94,13 @@ async function getWeather(){
     const pos=await getPosition(cache);
     if(!pos)throw new Error('no position');
     const url='https://api.open-meteo.com/v1/forecast?latitude='+encodeURIComponent(pos.lat)+'&longitude='+encodeURIComponent(pos.lon)+'&current=temperature_2m,weather_code,relative_humidity_2m,wind_speed_10m&wind_speed_unit=ms&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,sunset,uv_index_max&forecast_days=2&timezone=auto';
-    const r=await new Request(url).loadJSON();
+    const r=await req(url,8).loadJSON();
     const d={temp:Math.round(r.current.temperature_2m),code:r.current.weather_code,high:Math.round(r.daily.temperature_2m_max[0]),low:Math.round(r.daily.temperature_2m_min[0]),rain:r.daily.precipitation_probability_max[0],wind:Math.round(r.current.wind_speed_10m),hum:Math.round(r.current.relative_humidity_2m),warnings:[],unit:'ms'};
     const D=r.daily;if(D.time&&D.time.length>1)d.tmr={high:Math.round(D.temperature_2m_max[1]),low:Math.round(D.temperature_2m_min[1]),rain:D.precipitation_probability_max[1],wind:Math.round(D.wind_speed_10m_max[1])};
     d.uv=r.daily.uv_index_max?Math.round(r.daily.uv_index_max[0]):null;
     const ss=r.daily.sunset&&r.daily.sunset[0];if(ss)d.sunset=String(ss).slice(11,16);
-    try{d.warnings=await hkWarnings(pos);}catch(e){}
-    try{d.aqhi=await hkAqhi(pos);}catch(e){}
+    const [w,aq]=await Promise.all([withTimeout(hkWarnings(pos).catch(()=>[]),5000,[]),withTimeout(hkAqhi(pos).catch(()=>null),5000,cache.data&&cache.data.aqhi!=null?cache.data.aqhi:null)]);
+    d.warnings=w||[];d.aqhi=aq;
     fm.writeString(cachePath,JSON.stringify({ts:Date.now(),data:d,pos}));return d;
   }catch(e){return cache.data||null;}
 }
@@ -157,7 +162,7 @@ async function updateAvailable(){
     let check=fm.fileExists(checkPath)?JSON.parse(fm.readString(checkPath)):{};
     if(!check.ts||Date.now()-check.ts>6*3600000){
       const r=new Request('https://api.github.com/repos/xieergaihao/iphone-scriptable-widgets/commits/main');
-      r.headers={'Accept':'application/vnd.github.sha'};r.timeoutInterval=8;
+      r.headers={'Accept':'application/vnd.github.sha'};r.timeoutInterval=4;
       const sha=(await r.loadString()).trim();
       if(/^[0-9a-f]{40}$/.test(sha)){check={ts:Date.now(),sha};fm.writeString(checkPath,JSON.stringify(check));}
     }
@@ -179,7 +184,7 @@ const widget=new ListWidget();
 widget.backgroundColor=new Color(C.bg);widget.setPadding(10,14,8,14);
 widget.url=calshow(now);
 let agenda=null, agendaError=null;
-try{agenda=await getAgenda();}catch(e){agendaError=e.message||'Нет доступа к календарю';}
+try{agenda=await withTimeout(getAgenda(),8000,null);if(!agenda)throw new Error('Календарь не ответил вовремя');}catch(e){agendaError=e.message||'Нет доступа к календарю';}
 // Счётчик встреч — в шапке, а не отдельной колонкой
 let counterLine='';
 if(!agendaError){
@@ -192,14 +197,14 @@ const ico=head.addImage(SFSymbol.named('calendar').image);ico.imageSize=new Size
 head.addSpacer(6);txt(head,'Мой день',11,C.white,true);
 const slept=lastSleep();
 if(slept!=null&&slept<SLEEP_ALERT){head.addSpacer(6);txt(head,'сон '+Math.floor(slept/60)+':'+String(slept%60).padStart(2,'0'),10,C.amber,true);}
-const hasUpdate=await updateAvailable();
+const hasUpdate=await withTimeout(updateAvailable(),5000,false);
 if(hasUpdate){head.addSpacer(6);const ub=head.addStack();ub.url='scriptable:///run/Updater';
   const ui=ub.addImage(SFSymbol.named('arrow.down.circle.fill').image);ui.imageSize=new Size(11,11);ui.tintColor=new Color(C.amber);ub.addSpacer(2);txt(ub,'обновить',10,C.amber,true);}
 head.addSpacer();
 if(!hasUpdate)txt(head,now.toLocaleDateString('ru-RU',{day:'numeric',month:'short'}),10,C.muted);
 if(counterLine){if(!hasUpdate)head.addSpacer(8);txt(head,counterLine,10,C.mint,true);}
 widget.addSpacer(5);
-const weather=await getWeather();
+const weather=await withTimeout(getWeather(),14000,readCache().data||null);
 if(weather){
   // Строка 1: крупная температура, состояние и диапазон; справа — завтра
   const a=widget.addStack();a.centerAlignContent();
