@@ -1,4 +1,4 @@
-// QuickActions Fixed v2
+// QuickActions Fixed v3
 // Medium: широкие кнопки, 3 колонки × 2 ряда.
 // Без заголовка. Все существующие команды сохранены.
 
@@ -18,12 +18,48 @@ const COLORS = {
 //   Maps:    "comgooglemaps://?daddr=<адрес>&directionsmode=transit"
 //            "maps://?daddr=<адрес>&dirflg=r"
 //   Slack:   "slack://user?team=<T…>&id=<U…>"  (сразу открывает DM)
+// «Домой»: меню способов (сначала общественный транспорт, велосипед последним) → Google Maps.
+// Адрес спрашивается один раз и хранится в Keychain телефона.
+const HOME_KEY = "qa-home-address";
+const MODES = [["Транспорт", "transit"], ["Пешком", "walking"], ["На машине", "driving"], ["Велосипед", "bicycling"]];
+async function askAddress(current) {
+  const a = new Alert();
+  a.title = "Домашний адрес";
+  a.addTextField("улица, дом или название ЖК", current || "");
+  a.addAction("Сохранить");
+  a.addCancelAction("Отмена");
+  if (await a.presentAlert() === -1) return null;
+  const v = a.textFieldValue(0).trim();
+  if (v) Keychain.set(HOME_KEY, v);
+  return v || null;
+}
+async function homeMenu() {
+  let addr = Keychain.contains(HOME_KEY) ? Keychain.get(HOME_KEY) : await askAddress("");
+  if (!addr) return;
+  const m = new Alert();
+  m.title = "Домой";
+  m.message = addr;
+  for (const [t] of MODES) m.addAction(t);
+  m.addAction("Изменить адрес");
+  m.addCancelAction("Отмена");
+  const i = await m.presentSheet();
+  if (i === -1) return;
+  if (i === MODES.length) { await askAddress(addr); return homeMenu(); }
+  Safari.open("comgooglemaps://?daddr=" + encodeURIComponent(addr) + "&directionsmode=" + MODES[i][1]);
+}
+if (typeof args !== "undefined" && args.queryParameters && args.queryParameters.action === "home") {
+  await homeMenu();
+  Script.complete();
+  return;
+}
+const SELF = typeof URLScheme !== "undefined" ? URLScheme.forRunningScript() : "scriptable:///run/QuickActions";
+
 const ACTIONS = [
   ["Happ VPN",     "globe",       "QA VPN",       ""],
   ["Будильник",    "alarm",       "QA Alarm",     ""],
   ["Перевод",      "character.bubble", "QA Translate", "googletranslate://"],
   ["Таймер",       "timer",       "QA Timer",     ""],
-  ["Домой",        "house",       "QA Home",      ""],
+  ["Домой",        "house",       "QA Home",      SELF + "?action=home"],
   ["Slack себе",   "bubble.left", "QA Slack",
     "https://joom-team.slack.com/archives/D07BHUN4B0U"]
 ];
