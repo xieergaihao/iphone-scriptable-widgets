@@ -57,4 +57,35 @@ plistlib.dump(wf, raw.open("wb"), fmt=plistlib.FMT_BINARY)
 r = subprocess.run(["shortcuts", "sign", "--mode", "anyone", "--input", str(raw), "--output", str(signed)],
                    capture_output=True, text=True)
 raw.unlink()
-sys.exit(r.stderr) if r.returncode else print("OK", signed)
+if r.returncode: sys.exit(r.stderr)
+print("OK", signed)
+
+
+# «VPN выкл» / «VPN вкл» — для автоматизаций «Alipay открыт / закрыт»: без меню и уведомлений.
+def quiet(op, fname):
+    f2, c2, a2 = U(), U(), U()
+    g = U()
+    acts = [
+        act("is.workflow.actions.filter.vpns", {"UUID": f2, "WFContentItemFilter": filt,
+            "WFContentItemInputParameter": "Library", "WFContentItemLimitEnabled": True, "WFContentItemLimitNumber": 1}),
+        act("is.workflow.actions.count", {"UUID": c2, "Input": att(f2, "VPNs")}),
+        act("is.workflow.actions.conditional", {"GroupingIdentifier": g, "WFControlFlowMode": 0, "WFCondition": 2,
+            "WFNumberValue": "0", "WFInput": {"Type": "Variable", "Variable": att(c2, "Count")}}),
+        act("is.workflow.actions.vpn.set", {"WFVPNOperation": op, "WFVPN": att(f2, "VPNs")}),
+        act("is.workflow.actions.conditional", {"GroupingIdentifier": g, "WFControlFlowMode": 1}),
+        act("is.workflow.actions.filter.vpns", {"UUID": a2, "WFContentItemInputParameter": "Library",
+            "WFContentItemLimitEnabled": True, "WFContentItemLimitNumber": 1}),
+        act("is.workflow.actions.vpn.set", {"WFVPNOperation": op, "WFVPN": att(a2, "VPNs")}),
+        act("is.workflow.actions.conditional", {"GroupingIdentifier": g, "WFControlFlowMode": 2}),
+    ]
+    w = dict(wf, WFWorkflowActions=acts)
+    raw, out = OUT / (fname + ".unsigned.shortcut"), OUT / (fname + ".shortcut")
+    plistlib.dump(w, raw.open("wb"), fmt=plistlib.FMT_BINARY)
+    r = subprocess.run(["shortcuts", "sign", "--mode", "anyone", "--input", str(raw), "--output", str(out)],
+                       capture_output=True, text=True)
+    raw.unlink()
+    if r.returncode: sys.exit(r.stderr)
+    print("OK", out)
+
+quiet("Disconnect", "VPN выкл")
+quiet("Connect", "VPN вкл")
